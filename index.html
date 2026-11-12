@@ -188,6 +188,44 @@ button.item:hover{border-color:var(--ac)}
 .spc .hit:focus-visible{outline:none;stroke:var(--ac);stroke-width:2}
 .sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:10px 0}
 .sess>.fld{max-width:200px}
+.modal{position:fixed;inset:0;z-index:20;background:rgba(10,10,12,.55);display:flex;align-items:flex-start;justify-content:center;padding:6vh 12px 12px;overflow-y:auto}
+.modal[hidden]{display:none!important}
+.mbox{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:14px;padding:18px;width:min(620px,100%);display:grid;gap:10px}
+.mbox h2{margin:0}
+.modal.full{padding:0;align-items:stretch}
+.modal.full .mbox{width:100%;max-width:none;border-radius:0;border:0;min-height:100%;align-content:center;padding:24px 16px}
+.crh{display:flex;justify-content:space-between;font-size:14px}
+.crb{text-align:center;padding:24px 8px;border-radius:16px;border:2px solid var(--bd);display:grid;gap:6px;margin:10px 0}
+.crb.work{border-color:var(--ac)}
+.crb.rest,.crb.rr{border-style:dashed}
+.crl{font-size:22px;font-weight:650;overflow-wrap:anywhere}
+.crt{font-size:clamp(64px,22vw,140px);font-weight:700;line-height:1;letter-spacing:-.02em}
+.row.lv{gap:8px}
+.row.lv .act{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;font-weight:600}
+.row.lv .act small{font-size:12px;font-weight:400;color:var(--mut)}
+.lv-ko{color:var(--ko);border-color:var(--ko)}
+.lv-hard{color:var(--warn);border-color:var(--warn)}
+.lv-good{color:var(--ok);border-color:var(--ok)}
+.lv-easy{color:var(--ac);border-color:var(--ac)}
+.hint{margin-top:14px;font-size:13px}
+.chrono{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;font-size:15px}
+.chrono b{font-size:22px}
+.chrono b.late{color:var(--warn)}
+.advice{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;border-left:3px solid var(--ac);padding:4px 0 4px 10px;margin:0 0 10px}
+.nxt{font-size:13px;color:var(--mut)}
+.nxt b{color:var(--fg)}
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.gbox{display:grid;gap:6px}
+.ghead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.gch .g.mid{stroke-dasharray:3 3}
+.day-b{display:grid;gap:12px}
+.day-b .ev{margin:4px 0 0}
+.dl{display:grid;gap:2px}
+.rec{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rec input[type=date]{max-width:180px}
+.cfs{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:6px 16px}
+.cfs legend{margin-bottom:6px}
+@media(max-width:560px){#deck .row.lv .act{min-height:56px;font-size:15px;padding:6px 2px}}
 </style>
 <header class="top"><div class="top-in">
 <div class="brand"><span>Révisions PSI</span><span class="sync" id="sync">Enregistré sur cet appareil</span></div>
@@ -216,6 +254,7 @@ button.item:hover{border-color:var(--ac)}
 <div class="stat" id="stat"></div>
 </div>
 </main>
+<div class="modal" id="modal" hidden onclick="if(event.target===this&&!CR)closeModal()"><div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mtitle"><div id="mbody"></div></div></div>
 <script>window.MathJax={tex:{inlineMath:[['$','$']]},svg:{fontCache:'global'}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" onload="render()"></script>
 <script>
@@ -3267,25 +3306,31 @@ const TODAY=()=>ymd(new Date());
 const daysTo=s=>Math.round((pYmd(s)-pYmd(TODAY()))/864e5);
 const fDate=(s,o)=>pYmd(s).toLocaleDateString('fr-FR',o||{weekday:'short',day:'numeric',month:'short',year:'numeric'});
 const pct=(a,b)=>b?Math.round(100*a/b):0;
-const TYPES=['DS','Colle','Concours','Révision','Autre'];
+const TYPES=['DS','Colle','Concours','Révision','Sport','Autre'];
+const MATS=['Maths','Physique','Chimie','SII','Anglais','Français','Info','Autre'],PCATS=['Toutes','Maths','Physique','Chimie','SII','Français','Anglais','Autre'],GKINDS=['DS','Colle','DM','Concours blanc','Autre'];
+const isDate=s=>/^\d{4}-\d\d-\d\d$/.test(s||'');
 const KINDS={reps:{l:'Répétitions',u:'rép.'},kg:{l:'Charge',u:'kg'},s:{l:'Temps',u:'s'},m:{l:'Distance',u:'m'},autre:{l:'Autre unité',u:''}};
 const numOk=v=>v!==null&&v!==''&&v!==undefined&&isFinite(+v);
 function normSport(x){
   x=x&&typeof x==='object'?x:{};
-  const ex=Array.isArray(x.ex)?x.ex.filter(e=>e&&/^[a-z0-9]{1,32}$/i.test(e.id||'')).slice(0,100).map(e=>({id:e.id,name:String(e.name||'').slice(0,40)||'Exercice',kind:KINDS[e.kind]?e.kind:'reps',unit:String(e.unit||'').slice(0,12),lower:!!e.lower,goal:numOk(e.goal)?+e.goal:null})):[];
+  const ex=Array.isArray(x.ex)?x.ex.filter(e=>e&&/^[a-z0-9]{1,32}$/i.test(e.id||'')).slice(0,100).map(e=>({id:e.id,name:String(e.name||'').slice(0,40)||'Exercice',kind:KINDS[e.kind]?e.kind:'reps',unit:String(e.unit||'').slice(0,12),lower:!!e.lower,goal:numOk(e.goal)?+e.goal:null,lo:numOk(e.lo)?Math.max(1,Math.round(+e.lo)):8,hi:numOk(e.hi)?Math.max(1,Math.round(+e.hi)):12})):[];
   const log={};
-  for(const e of ex){const a=x.log&&Array.isArray(x.log[e.id])?x.log[e.id]:[];log[e.id]=a.filter(p=>p&&/^\d{4}-\d\d-\d\d$/.test(p.d||'')&&numOk(p.v)).slice(-2000).map(p=>({d:p.d,v:+p.v,n:String(p.n||'').slice(0,80)})).sort((a,b)=>a.d.localeCompare(b.d))}
-  return {ex,log};
+  for(const e of ex){const a=x.log&&Array.isArray(x.log[e.id])?x.log[e.id]:[];log[e.id]=a.filter(p=>p&&/^\d{4}-\d\d-\d\d$/.test(p.d||'')&&numOk(p.v)).slice(-2000).map(p=>Object.assign({d:p.d,v:+p.v,n:String(p.n||'').slice(0,80)},numOk(p.r)?{r:Math.round(+p.r)}:{})).sort((a,b)=>a.d.localeCompare(b.d))}
+  const c=x.circ&&typeof x.circ==='object'?x.circ:{},ids=new Set(ex.map(e=>e.id));
+  const circ={ids:Array.isArray(c.ids)?c.ids.filter(i=>ids.has(i)):[],work:numOk(c.work)?Math.max(0,Math.min(600,+c.work)):40,rest:numOk(c.rest)?Math.max(0,Math.min(600,+c.rest)):20,rounds:numOk(c.rounds)?Math.max(1,Math.min(20,Math.round(+c.rounds))):3,restRound:numOk(c.restRound)?Math.max(0,Math.min(900,+c.restRound)):60};
+  return {ex,log,circ};
 }
+function normCards(a){return Array.isArray(a)?a.filter(c=>c&&/^m[a-z0-9]{1,31}$/i.test(c.id||'')).slice(0,3000).map(c=>({id:c.id,cat:Math.max(1,Math.min(PCATS.length-1,Math.round(+c.cat)||PCATS.length-1)),q:String(c.q||'').slice(0,600),a:String(c.a||'').slice(0,1500),src:String(c.src||'').slice(0,80),d:isDate(c.d)?c.d:'',del:!!c.del})):[]}
+function normGrades(a){return Array.isArray(a)?a.filter(g=>g&&/^[a-z0-9]{1,32}$/i.test(g.id||'')&&isDate(g.d)&&numOk(g.v)).slice(0,2000).map(g=>({id:g.id,d:g.d,mat:MATS.includes(g.mat)?g.mat:'Autre',kind:GKINDS.includes(g.kind)?g.kind:'Autre',v:+g.v,sur:numOk(g.sur)&&+g.sur>0?+g.sur:20,ev:typeof g.ev==='string'?g.ev.slice(0,40):'',c:String(g.c||'').slice(0,120)})).sort((x,y)=>x.d.localeCompare(y.d)):[]}
 
 /* ---------- données du tableau de bord : agenda, réglages, activité ---------- */
 const DKEY='psi_dash';
-const DEFW={resume:true,tiles:true,next:true,redo:true};
+const DEFW={resume:true,day:true,tiles:true,next:true,week:true,redo:true};
 function normDash(x){
   x=x&&typeof x==='object'?x:{};const p=x.prefs&&typeof x.prefs==='object'?x.prefs:{};
   const ag=Array.isArray(x.agenda)?x.agenda.filter(e=>e&&typeof e.id==='string'&&/^[a-z0-9]{1,32}$/i.test(e.id)&&/^\d{4}-\d\d-\d\d$/.test(e.date||'')).map(e=>({id:e.id,title:String(e.title||'').slice(0,80),date:e.date,type:TYPES.includes(e.type)?e.type:'Autre',sec:typeof e.sec==='string'?e.sec:'',note:String(e.note||'').slice(0,300)})):[];
   const act={};if(x.act&&typeof x.act==='object')for(const [k,v] of Object.entries(x.act))if(/^\d{4}-\d\d-\d\d$/.test(k)&&v)act[k]={n:Math.max(0,+v.n||0),ok:Math.max(0,+v.ok||0)};
-  return {sport:normSport(x.sport),agenda:ag,prefs:{goal:Math.min(1000,Math.max(1,Math.round(+p.goal||40))),main:typeof p.main==='string'?p.main:'',w:Object.assign({},DEFW,p.w&&typeof p.w==='object'?p.w:{})},act,last:typeof x.last==='string'?x.last:'',t:+x.t||0};
+  return {sport:normSport(x.sport),mycards:normCards(x.mycards),grades:normGrades(x.grades),agenda:ag,prefs:{goal:Math.min(1000,Math.max(1,Math.round(+p.goal||40))),main:typeof p.main==='string'?p.main:'',w:Object.assign({},DEFW,p.w&&typeof p.w==='object'?p.w:{})},act,last:typeof x.last==='string'?x.last:'',t:+x.t||0};
 }
 let DASH=normDash(null);
 try{DASH=normDash(JSON.parse(localStorage.getItem(DKEY)||'null'))}catch(e){}
@@ -3325,7 +3370,7 @@ async function initSync(tries){
       dbRef=ref;
       if(s.exists){
         const remote=normDash(s.data()),m=mergeDash(DASH,remote),ms=JSON.stringify(m);
-        const changed=ms!==JSON.stringify(DASH);DASH=m;storeLocal();
+        const changed=ms!==JSON.stringify(DASH);DASH=m;storeLocal();rebuildPerso();
         if(ms!==JSON.stringify(remote)){dirty=true;flush()}
         if(changed)refreshView();
       }else if(!cached){dirty=true;flush()}
@@ -3336,8 +3381,8 @@ async function initSync(tries){
 
 /* ---------- statistiques ---------- */
 function deckStat(k){
-  const n=DECKS[k].data.C.length,s=getSt(k);
-  let ok=0,ko=0;for(const [i,v] of Object.entries(s)){if(!(+i<n))continue;if(v==='ok')ok++;else if(v==='ko')ko++}
+  const ks=cardKeys(k),n=ks.length,s=getSt(k);
+  let ok=0,ko=0;for(const i of ks){const v=s[i];if(v==='ok')ok++;else if(v==='ko')ko++}
   return {n,ok,ko,rest:n-ok-ko};
 }
 function sumStat(ids){return ids.reduce((a,k)=>{const s=deckStat(k);a.n+=s.n;a.ok+=s.ok;a.ko+=s.ko;a.rest+=s.rest;return a},{n:0,ok:0,ko:0,rest:0})}
@@ -3366,10 +3411,13 @@ function evRow(e,opts){
   const f=forecast(e),main=DASH.prefs.main===e.id,past=f.days<0;
   const scope=scopeName(e.sec);
   let h=`<div class="ev${main?' main':''}${past?' past':''}"><div class="jd">${jd(f.days)}</div><div class="ev-b"><div class="meta-l"><span class="chip-t">${esc(e.type)}</span>${main?'<span class="chip-t">Principale</span>':''}<span class="mut">${fDate(e.date)}</span></div><b>${esc(e.title)}</b>`;
-  if(!past&&f.s.n)h+=`<div class="meta-l"><span class="state ${f.state[0]}">${f.state[1]}</span><span class="mut num">${scope} : ${f.todo} cartes à travailler${f.days>0&&f.todo?` · ${f.per}/jour nécessaires · ton rythme ${Math.round(f.p)}/jour`:''}</span></div>`;
+  if(!past&&f.s.n&&e.type!=='Sport')h+=`<div class="meta-l"><span class="state ${f.state[0]}">${f.state[1]}</span><span class="mut num">${scope} : ${f.todo} cartes à travailler${f.days>0&&f.todo?` · ${f.per}/jour nécessaires · ton rythme ${Math.round(f.p)}/jour`:''}</span></div>`;
   if(e.note)h+=`<div class="mut">${esc(e.note)}</div>`;
   h+='</div>';
-  const rv=!past&&f.todo?`<a class="btn sm pri" href="#ds-${e.id}">Réviser (${f.todo})</a>`:'';
+  let rv=!past&&f.todo&&e.type!=='Sport'?`<a class="btn sm pri" href="#ds-${e.id}">Réviser (${f.todo})</a>`:'';
+  if(!past&&e.type==='Colle'&&f.s.n)rv+=`<a class="btn sm" href="#oralev-${e.id}">Simuler la colle</a>`;
+  if(!past&&e.type==='Sport')rv+=`<a class="btn sm pri" href="#sport">Ouvrir le sport</a>`;
+  if(f.days<=0&&e.type!=='Sport'&&e.type!=='Révision'){const g=DASH.grades.find(x=>x.ev===e.id);rv+=g?`<button class="btn sm" onclick="gradeModal('${g.id}')">Note : ${nfr(g.v)}/${nfr(g.sur)}</button>`:`<button class="btn sm" onclick="gradeModal('',null,'${e.id}')">Saisir la note</button>`;rv+=`<button class="btn sm" onclick="cardModal('',{ev:'${e.id}'})">+ Carte d’erreur</button>`}
   if(!(opts&&opts.edit)&&rv)h+=`<div class="ev-a">${rv}</div>`;
   if(opts&&opts.edit)h+=`<div class="ev-a">${rv}<button class="btn sm" onclick="setMain('${e.id}')" aria-pressed="${main}">${main?'Principale ✓':'Définir principale'}</button><button class="btn sm" onclick="editEv('${e.id}')">Modifier</button><button class="btn sm danger" onclick="delEv('${e.id}')">${delId===e.id?'Confirmer ?':'Supprimer'}</button></div>`;
   return h+'</div>';
@@ -3387,9 +3435,10 @@ function renderDash(){
     h+=`<div class="panel" id="cust"><h2>Personnaliser le tableau de bord</h2>
 <label class="fld" for="p-goal">Objectif quotidien (cartes révisées par jour)<input id="p-goal" type="number" min="1" max="1000" value="${g}" onchange="setGoal(this.value)"></label>
 <label class="fld" for="p-main">Échéance principale (mise en avant)<select id="p-main" onchange="setMain(this.value,true)"><option value="">La plus proche</option>${up.map(e=>`<option value="${e.id}"${DASH.prefs.main===e.id?' selected':''}>${esc(e.title)} · ${fDate(e.date,{day:'numeric',month:'short'})}</option>`).join('')}</select></label>
-<fieldset><legend>Blocs affichés</legend>${[['resume','Reprendre la dernière révision'],['tiles','Chiffres du jour'],['next','Prochaines échéances et prévisions'],['redo','Chapitres à reprendre']].map(([k,l])=>`<label class="chk" for="w-${k}"><input type="checkbox" id="w-${k}"${W[k]?' checked':''} onchange="setW('${k}',this.checked)">${l}</label>`).join('')}</fieldset></div>`;
+<fieldset><legend>Blocs affichés</legend>${[['resume','Reprendre la dernière révision'],['day','Ma journée'],['tiles','Chiffres du jour'],['next','Prochaines échéances et prévisions'],['week','Bilan de la semaine'],['redo','Chapitres à reprendre']].map(([k,l])=>`<label class="chk" for="w-${k}"><input type="checkbox" id="w-${k}"${W[k]?' checked':''} onchange="setW('${k}',this.checked)">${l}</label>`).join('')}</fieldset></div>`;
   }
   if(W.resume&&DECKS[DASH.last])h+=`<a class="resume" href="#${DASH.last}"><span><small>Reprendre</small>${esc(DECKS[DASH.last].title)}</span><span aria-hidden="true">→</span></a>`;
+  if(W.day)h+=dayBlock();
   if(W.tiles)h+=`<div class="tiles">
 <div class="tile"><small>Aujourd’hui</small><b>${t.n}<span> / ${g}</span></b><div class="meter" role="img" aria-label="${pct(t.n,g)} % de l’objectif"><i style="width:${Math.min(100,pct(t.n,g))}%"></i></div></div>
 <div class="tile"><small>Série</small><b>${streak()}<span> j</span></b><div class="mut">jours d’affilée avec au moins une carte</div></div>
@@ -3399,6 +3448,7 @@ function renderDash(){
     let up=upcoming();const m=up.find(e=>e.id===DASH.prefs.main);if(m)up=[m,...up.filter(e=>e!==m)];
     h+=`<h2>Prochaines échéances</h2>`+(up.length?up.slice(0,3).map(e=>evRow(e)).join('')+(up.length>3?`<a class="back" href="#agenda">Voir les ${up.length} échéances dans l’agenda →</a>`:''):`<div class="empty">Aucune échéance prévue. <a href="#agenda">Ajoute tes DS, colles et concours dans l’agenda</a> pour voir combien de cartes réviser par jour.</div>`);
   }
+  if(W.week)h+=weekBlock();
   if(W.redo){
     const r=allIds().map(k=>[k,deckStat(k)]).filter(x=>x[1].ko).sort((x,y)=>y[1].ko-x[1].ko).slice(0,5);
     h+=`<h2>Chapitres à reprendre</h2>`+(r.length?r.map(([k,s])=>`<a class="item" href="#${k}"><span>${esc(DECKS[k].title)}</span><span class="ir"><span class="num">${s.ko} à revoir</span><span>→</span></span></a>`).join(''):`<div class="empty">Aucune carte marquée « à revoir » pour l’instant.</div>`);
@@ -3425,6 +3475,7 @@ function renderStats(){
     h+=`<details class="srow"><summary><b>${m}</b>${bar(s)}<span class="cnt"><b>${pct(s.ok,s.n)} %</b> · ${s.ok}/${s.n} · ${s.ko} à revoir</span></summary>`+
       l.map(k=>{const c=deckStat(k);return `<a class="crow" href="#${k}"><span>${DECKS[k].title}</span>${bar(c)}<span class="cnt"><b>${pct(c.ok,c.n)} %</b> · ${c.ok}/${c.n} · ${c.ko} à rev.</span></a>`}).join('')+'</details>';
   }
+  h+=gradesHtml();
   h+=ioHtml();
   $('v-stats').innerHTML=h;
 }
@@ -3449,6 +3500,7 @@ function renderAgenda(){
 <label class="fld" for="ev-date">Date<input id="ev-date" type="date" required value="${ed.date}"></label>
 <label class="fld" for="ev-type">Type<select id="ev-type">${TYPES.map(x=>`<option${x===ed.type?' selected':''}>${x}</option>`).join('')}</select></label>
 <label class="fld full" for="ev-sec">Chapitres concernés (pour la prévision)<select id="ev-sec"><option value="">Toutes les sections</option><option value="Physique"${ed.sec==='Physique'?' selected':''}>Physique (toutes les sections)</option>${S.filter(x=>x[1].length||x[0]===ed.sec).map(x=>`<option value="${esc(x[0])}"${x[0]===ed.sec?' selected':''}>${esc(x[0])}</option>`).join('')}<option value="none"${ed.sec==='none'?' selected':''}>Aucune (pas de cartes, ex. anglais)</option></select></label>
+${editId?'':`<div class="full rec"><label class="chk" for="ev-rep"><input type="checkbox" id="ev-rep">Répéter chaque semaine jusqu’au</label><input id="ev-until" type="date" aria-label="Date de fin de la répétition" value="${addDays(TODAY(),56)}"></div>`}
 <label class="fld full" for="ev-note">Note (facultatif)<textarea id="ev-note" maxlength="300" placeholder="Ex. chapitres 1 à 5, calculatrice interdite">${esc(ed.note)}</textarea></label>
 <div class="full row" style="margin:0"><button class="btn pri" type="submit">${editId?'Enregistrer':'Ajouter'}</button>${editId?'<button class="btn" type="button" onclick="cancelEv()">Annuler</button>':''}</div></form>`;
   if(past.length)h+=`<details class="srow" style="margin-top:20px"><summary><b>Échéances passées (${past.length})</b></summary><div style="padding:0 12px 4px">${past.map(e=>evRow(e,{edit:true})).join('')}</div></details>`;
@@ -3459,8 +3511,10 @@ function pickDay(k){if(!editId){const f=$('ev-date');if(f){f.value=k;const t=$('
 function saveEv(ev){
   ev.preventDefault();
   const title=$('ev-title').value.trim(),date=$('ev-date').value;if(!title||!/^\d{4}-\d\d-\d\d$/.test(date))return;
-  const e={id:editId||Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:title.slice(0,80),date,type:$('ev-type').value,sec:$('ev-sec').value,note:$('ev-note').value.trim().slice(0,300)};
+  const type=$('ev-type').value,e={id:editId||Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:title.slice(0,80),date,type,sec:type==='Sport'?'none':$('ev-sec').value,note:$('ev-note').value.trim().slice(0,300)};
   const i=DASH.agenda.findIndex(x=>x.id===e.id);if(i>=0)DASH.agenda[i]=e;else DASH.agenda.push(e);
+  const rp=$('ev-rep'),un=$('ev-until');
+  if(!editId&&rp&&rp.checked&&un&&isDate(un.value)){let d=addDays(date,7),n=1;while(d<=un.value&&n<60){DASH.agenda.push(Object.assign({},e,{id:e.id+'w'+n,date:d}));d=addDays(d,7);n++}}
   editId='';delId='';calM=new Date(pYmd(date).getFullYear(),pYmd(date).getMonth(),1);saveDash();renderAgenda();
 }
 function editEv(id){editId=id;delId='';renderAgenda();const t=$('ev-title');if(t){t.focus();t.scrollIntoView({block:'center',behavior:'smooth'})}}
@@ -3480,6 +3534,7 @@ const unitOf=e=>e.kind==='autre'?e.unit:KINDS[e.kind].u;
 const nfr=v=>(+v).toLocaleString('fr-FR',{maximumFractionDigits:2});
 const fmtV=(e,v)=>e.kind==='s'&&v>=60?`${Math.floor(v/60)} min${Math.round(v%60)?' '+Math.round(v%60)+' s':''}`:`${nfr(v)}${unitOf(e)?' '+unitOf(e):''}`;
 const better=(e,a,b)=>e.lower?a<b:a>b;
+const fmtP=(e,p)=>fmtV(e,p.v)+(e.kind==='kg'&&numOk(p.r)?` × ${p.r} rép.`:'');
 const parseNum=s=>{const t=String(s).trim().replace(',','.');return t!==''&&isFinite(+t)?+t:null};
 function exStats(e){
   const L=SP().log[e.id]||[];if(!L.length)return {n:0};
@@ -3531,14 +3586,14 @@ function renderSport(){
 <div class="tile"><small>Dernière séance</small><b>${dl===null?'—':dl===0?'Auj.':dl===1?'Hier':dl+'<span> j</span>'}</b><div class="mut">${lastD?fDate(lastD,{day:'numeric',month:'long'}):'aucune pour l’instant'}</div></div>
 <div class="tile"><small>Séances (30 j)</small><b>${n30}</b><div class="mut">jours avec au moins une mesure</div></div>
 <div class="tile"><small>Records (30 j)</small><b>${rec}</b><div class="mut">nouveaux records personnels</div></div></div>`;
-    h+=`<h2>Saisir une séance</h2><form class="box sess" onsubmit="spSaveSession(event)"><label class="fld" for="sp-date">Date<input id="sp-date" type="date" value="${TODAY()}" required></label><div class="sgrid">${ex.map(e=>{const st=exStats(e);return `<label class="fld" for="sp-v-${e.id}">${esc(e.name)} <span class="mut">(${esc(unitOf(e)||'valeur')})</span><input id="sp-v-${e.id}" inputmode="decimal" autocomplete="off" placeholder="${st.n?'dernier : '+nfr(st.last.v):'—'}"></label>`}).join('')}</div><div class="acts" style="margin:4px 0 0"><button class="btn pri" type="submit">Enregistrer la séance</button><span class="mut" id="sp-msg" role="status"></span></div></form>`;
-    h+=`<h2>Mes exercices</h2><div class="exg">${ex.map(e=>{const st=exStats(e);return `<button class="exc${spSel===e.id?' on':''}" onclick="spOpen('${e.id}')" aria-pressed="${spSel===e.id}"><span class="lbl">${esc(KINDS[e.kind].l)}${e.lower?' · plus bas = mieux':''}</span><b>${esc(e.name)}</b><span class="exr">${st.n?`<span><small>Record</small>${fmtV(e,st.best.v)}</span><span><small>Dernier</small>${fmtV(e,st.last.v)}</span>`:'<span class="mut">Pas encore de mesure</span>'}</span>${spark(e)}</button>`}).join('')}</div>`;
+    h+=`<h2>Saisir une séance</h2><form class="box sess" onsubmit="spSaveSession(event)"><label class="fld" for="sp-date">Date<input id="sp-date" type="date" value="${TODAY()}" required></label><div class="sgrid">${ex.map(e=>{const st=exStats(e);return `<label class="fld" for="sp-v-${e.id}">${esc(e.name)} <span class="mut">(${esc(unitOf(e)||'valeur')})</span><input id="sp-v-${e.id}" inputmode="decimal" autocomplete="off" placeholder="${st.n?'vise '+esc(nextTarget(e).t.split(' × ')[0]):'—'}"></label>`+(e.kind==='kg'?`<label class="fld" for="sp-r-${e.id}">${esc(e.name)} <span class="mut">(rép.)</span><input id="sp-r-${e.id}" inputmode="numeric" autocomplete="off" placeholder="${e.lo}–${e.hi}"></label>`:'')}).join('')}</div><div class="acts" style="margin:4px 0 0"><button class="btn pri" type="submit">Enregistrer la séance</button><span class="mut" id="sp-msg" role="status"></span></div></form>`+circuitHtml();
+    h+=`<h2>Mes exercices</h2><div class="exg">${ex.map(e=>{const st=exStats(e);return `<button class="exc${spSel===e.id?' on':''}" onclick="spOpen('${e.id}')" aria-pressed="${spSel===e.id}"><span class="lbl">${esc(KINDS[e.kind].l)}${e.lower?' · plus bas = mieux':''}</span><b>${esc(e.name)}</b><span class="exr">${st.n?`<span><small>Record</small>${fmtV(e,st.best.v)}</span><span><small>Dernier</small>${fmtP(e,st.last)}</span>`:'<span class="mut">Pas encore de mesure</span>'}</span>${st.n?`<span class="nxt">Prochaine séance : <b>${esc(nextTarget(e).t)}</b></span>`:''}${spark(e)}</button>`}).join('')}</div>`;
     const e=ex.find(x=>x.id===spSel);
     if(e){
       const L=sp.log[e.id]||[];
-      h+=`<div class="box spd" id="spd"><div class="vhead" style="margin-bottom:6px"><h2 style="margin:0">${esc(e.name)}</h2><button class="btn sm" onclick="spSel='';renderSport()">Fermer</button></div><p class="actc" id="spcap" aria-live="polite"></p>${chart(e)}
-<form class="form" style="margin-top:12px" onsubmit="spAddEntry(event,'${e.id}')"><label class="fld" for="sp-e-v">Performance (${esc(unitOf(e)||'valeur')})<input id="sp-e-v" inputmode="decimal" required autocomplete="off"></label><label class="fld" for="sp-e-d">Date<input id="sp-e-d" type="date" value="${TODAY()}" required></label><label class="fld full" for="sp-e-n">Note (facultatif)<input id="sp-e-n" maxlength="80" placeholder="Ex. 3 séries, lesté 5 kg, fatigué"></label><div class="full"><button class="btn pri" type="submit">Ajouter la mesure</button></div></form>`;
-      if(L.length)h+=`<details class="srow" style="margin-top:12px"><summary><b>Historique (${L.length})</b></summary>${L.map((p,k)=>[p,k]).reverse().map(([p,k])=>`<div class="crow"><span>${fDate(p.d)}${p.n?` · <span class="mut">${esc(p.n)}</span>`:''}</span><span class="num"><b>${fmtV(e,p.v)}</b></span><span class="cnt"><button class="btn sm danger" onclick="spDelEntry('${e.id}',${k})">${spDel===e.id+':'+k?'Confirmer ?':'Supprimer'}</button></span></div>`).join('')}</details>`;
+      h+=`<div class="box spd" id="spd"><div class="vhead" style="margin-bottom:6px"><h2 style="margin:0">${esc(e.name)}</h2><button class="btn sm" onclick="spSel='';renderSport()">Fermer</button></div><p class="actc" id="spcap" aria-live="polite"></p>${L.length?(()=>{const nt=nextTarget(e);return `<div class="advice"><span class="lbl">Prochaine séance</span><b>${esc(nt.t)}</b>${nt.why?`<span class="mut">${esc(nt.why)}</span>`:''}</div>`})():''}${chart(e)}
+<form class="form" style="margin-top:12px" onsubmit="spAddEntry(event,'${e.id}')"><label class="fld" for="sp-e-v">Performance (${esc(unitOf(e)||'valeur')})<input id="sp-e-v" inputmode="decimal" required autocomplete="off"></label>${e.kind==='kg'?`<label class="fld" for="sp-e-r">Répétitions<input id="sp-e-r" inputmode="numeric" autocomplete="off" placeholder="${e.lo}–${e.hi}"></label>`:''}<label class="fld" for="sp-e-d">Date<input id="sp-e-d" type="date" value="${TODAY()}" required></label><label class="fld full" for="sp-e-n">Note (facultatif)<input id="sp-e-n" maxlength="80" placeholder="Ex. 3 séries, lesté 5 kg, fatigué"></label><div class="full"><button class="btn pri" type="submit">Ajouter la mesure</button></div></form>`;
+      if(L.length)h+=`<details class="srow" style="margin-top:12px"><summary><b>Historique (${L.length})</b></summary>${L.map((p,k)=>[p,k]).reverse().map(([p,k])=>`<div class="crow"><span>${fDate(p.d)}${p.n?` · <span class="mut">${esc(p.n)}</span>`:''}</span><span class="num"><b>${fmtP(e,p)}</b></span><span class="cnt"><button class="btn sm danger" onclick="spDelEntry('${e.id}',${k})">${spDel===e.id+':'+k?'Confirmer ?':'Supprimer'}</button></span></div>`).join('')}</details>`;
       h+=spEdit?`<form class="form" style="margin-top:12px" onsubmit="spSaveEx(event,'${e.id}')">${exFields(e)}<div class="full acts" style="margin:0"><button class="btn pri" type="submit">Enregistrer</button><button class="btn" type="button" onclick="spEdit=false;renderSport()">Annuler</button><button class="btn danger" type="button" onclick="spDelEx('${e.id}')">${spDel===e.id?'Confirmer la suppression':'Supprimer l’exercice'}</button></div></form>`:`<div class="acts" style="margin:12px 0 0"><button class="btn sm" onclick="spEdit=true;renderSport()">Modifier l’exercice ou l’objectif</button></div>`;
       h+='</div>';
     }
@@ -3549,34 +3604,211 @@ function renderSport(){
   if($('spcap'))spCap(-1);
 }
 function exFields(e){
-  const p=e?'ed':'nw',x=e||{name:'',kind:'reps',unit:'',lower:false,goal:null};
+  const p=e?'ed':'nw',x=e||{name:'',kind:'reps',unit:'',lower:false,goal:null,lo:8,hi:12};
   return `<label class="fld" for="${p}-name">Nom<input id="${p}-name" maxlength="40" required value="${esc(x.name)}" placeholder="Ex. Tractions"></label>
 <label class="fld" for="${p}-kind">Mesure<select id="${p}-kind">${Object.entries(KINDS).map(([k,v])=>`<option value="${k}"${k===x.kind?' selected':''}>${v.l}${v.u?' ('+v.u+')':''}</option>`).join('')}</select></label>
 <label class="fld" for="${p}-unit">Unité si « Autre unité »<input id="${p}-unit" maxlength="12" value="${esc(x.unit)}" placeholder="Ex. km, tours"></label>
 <label class="fld" for="${p}-goal">Objectif (facultatif)<input id="${p}-goal" inputmode="decimal" value="${x.goal!=null?nfr(x.goal):''}" placeholder="Ex. 40"></label>
+<label class="fld" for="${p}-lo">Charge : répétitions min<input id="${p}-lo" type="number" min="1" max="100" value="${x.lo||8}"></label>
+<label class="fld" for="${p}-hi">Charge : répétitions max<input id="${p}-hi" type="number" min="1" max="100" value="${x.hi||12}"></label>
 <label class="chk full" for="${p}-lower"><input type="checkbox" id="${p}-lower"${x.lower?' checked':''}>Plus la valeur est basse, mieux c’est (ex. temps sur 1 km)</label>`;
 }
 function spSaveEx(ev,id){
   ev.preventDefault();const p=id?'ed':'nw',name=$(p+'-name').value.trim();if(!name)return;
-  const d={name:name.slice(0,40),kind:$(p+'-kind').value,unit:$(p+'-unit').value.trim().slice(0,12),lower:$(p+'-lower').checked,goal:parseNum($(p+'-goal').value)};
+  const d={name:name.slice(0,40),kind:$(p+'-kind').value,unit:$(p+'-unit').value.trim().slice(0,12),lower:$(p+'-lower').checked,goal:parseNum($(p+'-goal').value),lo:Math.max(1,Math.round(+$(p+'-lo').value||8)),hi:Math.max(1,Math.round(+$(p+'-hi').value||12))};if(d.hi<d.lo)d.hi=d.lo;
   if(id){Object.assign(SP().ex.find(e=>e.id===id),d);spEdit=false}
   else{const nid='x'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);SP().ex.push(Object.assign({id:nid},d));SP().log[nid]=[];spSel=nid}
   spDel='';saveDash();renderSport();
 }
-function spQuick(n,k){const nid='x'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);SP().ex.push({id:nid,name:n,kind:k,unit:'',lower:false,goal:null});SP().log[nid]=[];spSel=nid;saveDash();renderSport();const d=$('spd');if(d&&d.scrollIntoView)d.scrollIntoView({block:'start',behavior:'smooth'})}
+function spQuick(n,k){const nid='x'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);SP().ex.push({id:nid,name:n,kind:k,unit:'',lower:false,goal:null,lo:8,hi:12});SP().log[nid]=[];spSel=nid;saveDash();renderSport();const d=$('spd');if(d&&d.scrollIntoView)d.scrollIntoView({block:'start',behavior:'smooth'})}
 function spOpen(id){spSel=spSel===id?'':id;spEdit=false;spDel='';renderSport();const d=$('spd');if(d&&d.scrollIntoView)d.scrollIntoView({block:'start',behavior:'smooth'})}
 function spPush(id,p){const L=SP().log[id]||(SP().log[id]=[]);L.push(p);L.sort((a,b)=>a.d.localeCompare(b.d))}
-function spAddEntry(ev,id){ev.preventDefault();const v=parseNum($('sp-e-v').value),d=$('sp-e-d').value;if(v===null||!/^\d{4}-\d\d-\d\d$/.test(d))return;spPush(id,{d,v,n:$('sp-e-n').value.trim().slice(0,80)});saveDash();renderSport()}
+function spAddEntry(ev,id){ev.preventDefault();const v=parseNum($('sp-e-v').value),d=$('sp-e-d').value;if(v===null||!/^\d{4}-\d\d-\d\d$/.test(d))return;const p={d,v,n:$('sp-e-n').value.trim().slice(0,80)},r=$('sp-e-r')?parseNum($('sp-e-r').value):null;if(r!==null)p.r=Math.round(r);spPush(id,p);saveDash();renderSport()}
 function spSaveSession(ev){
   ev.preventDefault();const d=$('sp-date').value;if(!/^\d{4}-\d\d-\d\d$/.test(d))return;let n=0;
-  for(const e of SP().ex){const v=parseNum(($('sp-v-'+e.id)||{}).value||'');if(v!==null){spPush(e.id,{d,v,n:''});n++}}
+  for(const e of SP().ex){const v=parseNum(($('sp-v-'+e.id)||{}).value||'');if(v!==null){const p={d,v,n:''},r=$('sp-r-'+e.id)?parseNum($('sp-r-'+e.id).value):null;if(r!==null)p.r=Math.round(r);spPush(e.id,p);n++}}
   if(!n){const m=$('sp-msg');if(m)m.textContent='Remplis au moins une performance.';return}
   saveDash();renderSport();const m=$('sp-msg');if(m)m.textContent=`${n} performance${n>1?'s':''} enregistrée${n>1?'s':''}.`;
 }
 function spDelEntry(id,k){const key=id+':'+k;if(spDel!==key){spDel=key;renderSport();return}SP().log[id].splice(k,1);spDel='';saveDash();renderSport()}
 function spDelEx(id){if(spDel!==id){spDel=id;renderSport();return}SP().ex=SP().ex.filter(e=>e.id!==id);delete SP().log[id];spSel='';spEdit=false;spDel='';saveDash();renderSport()}
 
+/* ---------- fenêtre modale ---------- */
+function openModal(html){const m=$('modal');$('mbody').innerHTML=html;m.hidden=false;const f=m.querySelector('input,textarea,select,button');if(f)f.focus()}
+function closeModal(){const m=$('modal');if(m){m.hidden=true;$('mbody').innerHTML=''}}
+const secToMat=n=>!n?'Autre':n==='Mathématiques'?'Maths':n==='Physique — Chimie'?'Chimie':n.startsWith('Physique')?'Physique':n==='Sciences de l’ingénieur'?'SII':n==='Français'?'Français':'Autre';
+function evMat(e){if(e.sec==='none')return /anglais/i.test(e.title)?'Anglais':/fran/i.test(e.title)?'Français':'Autre';if(!e.sec){const t=e.title.toLowerCase();return /math/.test(t)?'Maths':/chimie/.test(t)?'Chimie':/phys/.test(t)?'Physique':/sii|\bsi\b/.test(t)?'SII':/anglais/.test(t)?'Anglais':/fran/.test(t)?'Français':'Autre'}return secToMat(e.sec)}
+const gKind=t=>t==='DS'?'DS':t==='Colle'?'Colle':t==='Concours'?'Concours blanc':'Autre';
+
+/* ---------- cartes d'erreurs personnelles ---------- */
+const PKEY='perso';
+function txtHtml(s){return esc(s).replace(/\n/g,'<br>')}
+function rebuildPerso(){
+  const live=DASH.mycards.filter(c=>!c.del),m={};
+  for(const c of live)m[c.id]=[c.cat,txtHtml(c.q),txtHtml(c.a)+(c.src?`<br><span class="mut">Source : ${esc(c.src)}</span>`:'')];
+  DECKS[PKEY].data.byId=m;DECKS[PKEY].data.ids=live.map(c=>c.id);DECKS[PKEY].data.C=live.map(c=>m[c.id]);IDX=null;
+}
+function cardModal(id,pre){
+  pre=pre||{};const c=DASH.mycards.find(x=>x.id===id)||{cat:0,q:'',a:'',src:''};
+  let mat=c.cat?PCATS[c.cat]:(pre.mat||'Autre'),src=c.src||pre.src||'';
+  if(pre.ev){const e=DASH.agenda.find(x=>x.id===pre.ev);if(e){mat=evMat(e);src=e.title+' · '+fDate(e.date,{day:'numeric',month:'short'})}}
+  if(!PCATS.includes(mat)||mat==='Toutes')mat='Autre';
+  openModal(`<h2 id="mtitle">${id?'Modifier la carte':'Nouvelle carte d’erreur'}</h2><p class="mut" style="margin:0">Note ce qui t’a piégé : la carte entre dans ta répétition espacée. Formules entre $…$, par ex. $\\vec E_2-\\vec E_1=\\frac{\\sigma}{\\varepsilon_0}\\vec n$.</p>
+<form class="form" onsubmit="saveCard(event,'${id||''}')"><label class="fld" for="pc-mat">Matière<select id="pc-mat">${PCATS.slice(1).map(m=>`<option${m===mat?' selected':''}>${m}</option>`).join('')}</select></label><label class="fld" for="pc-src">Source (facultatif)<input id="pc-src" maxlength="80" value="${esc(src)}" placeholder="Ex. DS 4, colle de M. Kieffer"></label>
+<label class="fld full" for="pc-q">Question<textarea id="pc-q" required maxlength="600" rows="2" placeholder="Ex. Relation de passage pour E : sens de la normale ?">${esc(c.q)}</textarea></label>
+<label class="fld full" for="pc-a">Réponse<textarea id="pc-a" required maxlength="1500" rows="3" placeholder="La bonne réponse, et l’erreur à ne plus faire">${esc(c.a)}</textarea></label>
+<div class="full acts" style="margin:0"><button class="btn pri" type="submit">${id?'Enregistrer':'Ajouter la carte'}</button><button class="btn" type="button" onclick="closeModal()">Annuler</button>${id?`<button class="btn danger" type="button" onclick="delCard('${id}')">Supprimer la carte</button>`:''}</div></form>`);
+}
+function saveCard(ev,id){
+  ev.preventDefault();const q=$('pc-q').value.trim(),a=$('pc-a').value.trim();if(!q||!a)return;
+  const d={cat:Math.max(1,PCATS.indexOf($('pc-mat').value)),q,a,src:$('pc-src').value.trim().slice(0,80)};
+  if(id)Object.assign(DASH.mycards.find(x=>x.id===id),d);else DASH.mycards.push(Object.assign({id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),d:TODAY(),del:false},d));
+  saveDash();rebuildPerso();closeModal();if(SES)render();else refreshView();
+}
+function delCard(id){
+  const c=DASH.mycards.find(x=>x.id===id);if(!c)return;c.del=true;c.q='';c.a='';
+  const st=getSt(PKEY);delete st[id];putSt(PKEY);const m=SRS[DECKS[PKEY].key];if(m){delete m[id];saveSrs()}
+  saveDash();rebuildPerso();closeModal();if(SES){SES.items=SES.items.filter(([k,ci])=>!(k===PKEY&&ci===id));ord=SES.items.map((_,n)=>n);render()}else refreshView();
+}
+
+/* ---------- notes de DS et de colles ---------- */
+function gradeModal(id,pre,evId){
+  const g=DASH.grades.find(x=>x.id===id)||Object.assign({d:TODAY(),mat:'Maths',kind:'DS',v:'',sur:20,ev:'',c:''},pre||{});
+  if(evId){const e=DASH.agenda.find(x=>x.id===evId);if(e){g.d=e.date;g.mat=evMat(e);g.kind=gKind(e.type);g.ev=e.id;g.c=e.title}}
+  openModal(`<h2 id="mtitle">${id?'Modifier la note':'Saisir une note'}</h2><form class="form" onsubmit="saveGrade(event,'${id||''}','${esc(g.ev)}')">
+<label class="fld" for="gr-v">Note<input id="gr-v" inputmode="decimal" required value="${g.v===''?'':nfr(g.v)}" placeholder="Ex. 13,5"></label><label class="fld" for="gr-sur">Sur<input id="gr-sur" inputmode="decimal" required value="${nfr(g.sur)}"></label>
+<label class="fld" for="gr-mat">Matière<select id="gr-mat">${MATS.map(m=>`<option${m===g.mat?' selected':''}>${m}</option>`).join('')}</select></label><label class="fld" for="gr-kind">Type<select id="gr-kind">${GKINDS.map(m=>`<option${m===g.kind?' selected':''}>${m}</option>`).join('')}</select></label>
+<label class="fld" for="gr-d">Date<input id="gr-d" type="date" required value="${g.d}"></label><label class="fld" for="gr-c">Commentaire (facultatif)<input id="gr-c" maxlength="120" value="${esc(g.c)}" placeholder="Ex. DS 4, bon raisonnement mais calculs"></label>
+<div class="full acts" style="margin:0"><button class="btn pri" type="submit">Enregistrer</button><button class="btn" type="button" onclick="closeModal()">Annuler</button>${id?`<button class="btn danger" type="button" onclick="delGrade('${id}')">Supprimer</button>`:''}</div></form>`);
+}
+function saveGrade(ev,id,evId){
+  ev.preventDefault();const v=parseNum($('gr-v').value),sur=parseNum($('gr-sur').value),d=$('gr-d').value;
+  if(v===null||!sur||sur<=0||!isDate(d))return;
+  const o={d,v,sur,mat:$('gr-mat').value,kind:$('gr-kind').value,c:$('gr-c').value.trim().slice(0,120),ev:evId||''};
+  if(id)Object.assign(DASH.grades.find(x=>x.id===id),o);else DASH.grades.push(Object.assign({id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)},o));
+  DASH.grades.sort((a,b)=>a.d.localeCompare(b.d));saveDash();closeModal();refreshView();
+}
+function delGrade(id){DASH.grades=DASH.grades.filter(x=>x.id!==id);saveDash();closeModal();refreshView()}
+const on20=g=>20*g.v/g.sur;
+function gradeChart(L){
+  const W=300,H=120,pl=26,pr=8,pt=10,pb=20,t=L.map(g=>pYmd(g.d).getTime());let t0=Math.min(...t),t1=Math.max(...t);if(t0===t1){t0-=7*864e5;t1+=7*864e5}
+  const X=v=>pl+(v-t0)/(t1-t0)*(W-pl-pr),Y=v=>pt+(1-v/20)*(H-pt-pb),pts=L.map((g,k)=>[X(t[k]),Y(on20(g))]);
+  let s=`<svg class="spc gch" viewBox="0 0 ${W} ${H}" role="img" aria-label="${L.length} notes">`;
+  for(const v of [0,10,20])s+=`<line class="g${v===10?' mid':''}" x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="yl" x="${pl-5}" y="${Y(v)+4}">${v}</text>`;
+  if(pts.length>1)s+=`<polyline class="ln" points="${pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`;
+  pts.forEach((p,k)=>{s+=`<circle class="pt${k===pts.length-1?' end':''}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4.5"><title>${fDate(L[k].d,{day:'numeric',month:'short'})} · ${L[k].kind} : ${nfr(L[k].v)}/${nfr(L[k].sur)}${L[k].c?' · '+esc(L[k].c):''}</title></circle>`});
+  return s+`<text class="xl" x="${pl}" y="${H-4}">${new Date(t0).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</text><text class="xl" x="${W-pr}" y="${H-4}" text-anchor="end">${new Date(t1).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</text></svg>`;
+}
+function gradesHtml(){
+  const G=DASH.grades;let h=`<h2>Mes notes</h2><div class="acts"><button class="btn pri" onclick="gradeModal('')">+ Saisir une note</button><span class="mut">ou depuis l’agenda, sur un DS ou une colle passés</span></div>`;
+  if(!G.length)return h+`<div class="empty">Aucune note pour l’instant. Chaque note saisie trace ta courbe par matière, ramenée sur 20.</div>`;
+  const by={};for(const g of G)(by[g.mat]=by[g.mat]||[]).push(g);
+  h+=`<div class="gg">${MATS.filter(m=>by[m]).map(m=>{const L=by[m],avg=L.reduce((s,g)=>s+on20(g),0)/L.length,last=L[L.length-1];return `<div class="box gbox"><div class="ghead"><b>${m}</b><span class="num"><b>${nfr(Math.round(avg*10)/10)}</b><span class="mut"> /20 de moyenne · ${L.length} note${L.length>1?'s':''}</span></span></div>${gradeChart(L)}<div class="mut num">Dernière : ${nfr(last.v)}/${nfr(last.sur)} (${last.kind}, ${fDate(last.d,{day:'numeric',month:'short'})})</div></div>`}).join('')}</div>`;
+  h+=`<details class="srow" style="margin-top:10px"><summary><b>Toutes mes notes (${G.length})</b></summary>${G.slice().reverse().map(g=>`<div class="crow"><span>${fDate(g.d)} · ${g.mat} · ${g.kind}${g.c?` · <span class="mut">${esc(g.c)}</span>`:''}</span><span class="num"><b>${nfr(g.v)}/${nfr(g.sur)}</b></span><span class="cnt"><button class="btn sm" onclick="gradeModal('${g.id}')">Modifier</button></span></div>`).join('')}</details>`;
+  return h;
+}
+
+/* ---------- Ma journée et bilan de la semaine ---------- */
+function dayBlock(){
+  let h=`<h2>Ma journée</h2><div class="box day-b">`;
+  const sec=S.map((x,si)=>[x,si,countOf(x[1],isDue)]).filter(x=>x[2]);
+  h+=`<div class="dl"><span class="lbl">Cartes du jour</span>${sec.length?`<div class="acts" style="margin:4px 0 0">${sec.map(([x,si,n])=>`<a class="btn sm" href="#jour-${si}">${esc(x[0].replace('Physique — ',''))} · ${n}</a>`).join('')}</div>`:`<div class="mut">Aucune carte à réviser aujourd’hui. Découvre de nouvelles cartes dans l’onglet Révisions.</div>`}</div>`;
+  const soon=DASH.agenda.filter(e=>{const d=daysTo(e.date);return d===0||d===1}).sort((a,b)=>a.date.localeCompare(b.date));
+  h+=`<div class="dl"><span class="lbl">Aujourd’hui et demain</span>${soon.length?soon.map(e=>evRow(e)).join(''):`<div class="mut">Rien de prévu dans l’agenda.</div>`}</div>`;
+  const ex=SP().ex.filter(e=>(SP().log[e.id]||[]).length);
+  if(ex.length)h+=`<div class="dl"><span class="lbl">Prochaine séance de sport</span><div class="mut">${ex.slice(0,4).map(e=>`${esc(e.name)} : <b>${nextTarget(e).t}</b>`).join(' · ')}${ex.length>4?' · …':''}</div><div class="acts" style="margin:6px 0 0"><a class="btn sm" href="#sport">Ouvrir le sport</a></div></div>`;
+  return h+'</div>';
+}
+function weekStats(start,end){
+  let n=0,ok=0,days=0;for(let d=start;d<=end;d=addDays(d,1)){const a=dayAct(d);n+=a.n;ok+=a.ok;if(a.n)days++}
+  const sd=new Set();let rec=0;for(const e of SP().ex){for(const p of SP().log[e.id]||[])if(p.d>=start&&p.d<=end)sd.add(p.d);for(const p of exStats(e).prs||[])if(p.d>=start&&p.d<=end)rec++}
+  const g=DASH.grades.filter(x=>x.d>=start&&x.d<=end);
+  return {n,ok,days,sport:sd.size,rec,g,avg:g.length?g.reduce((s,x)=>s+on20(x),0)/g.length:null};
+}
+function weekBlock(){
+  const t=TODAY(),mon=addDays(t,-((pYmd(t).getDay()+6)%7)),pm=addDays(mon,-7),span=daysTo(mon)*-1;
+  const w=weekStats(mon,t),p=weekStats(pm,addDays(pm,span)),nx=DASH.agenda.filter(e=>{const d=daysTo(e.date);return d>0&&d<=7&&e.type!=='Sport'}).length;
+  const cmp=(a,b)=>b?` <span class="mut">(${a>=b?'+':'−'}${Math.abs(a-b)} vs semaine dernière à la même date)</span>`:'';
+  return `<h2>Bilan de la semaine <span class="secsum">depuis lundi ${fDate(mon,{day:'numeric',month:'long'})}</span></h2><div class="tiles">
+<div class="tile"><small>Cartes révisées</small><b>${w.n}</b><div class="mut">${w.ok} notées comme sues${cmp(w.n,p.n)}</div></div>
+<div class="tile"><small>Jours actifs</small><b>${w.days}<span> / ${span+1}</span></b><div class="mut">avec au moins une carte</div></div>
+<div class="tile"><small>Sport</small><b>${w.sport}<span> séance${w.sport>1?'s':''}</span></b><div class="mut">${w.rec} record${w.rec>1?'s':''} battu${w.rec>1?'s':''}</div></div>
+<div class="tile"><small>Notes</small><b>${w.avg===null?'—':nfr(Math.round(w.avg*10)/10)}${w.avg===null?'':'<span> /20</span>'}</b><div class="mut">${w.g.length} note${w.g.length>1?'s':''} cette semaine · ${nx} échéance${nx>1?'s':''} dans les 7 jours</div></div></div>`;
+}
+
+/* ---------- sport : progression automatique ---------- */
+function nextTarget(e){
+  const L=SP().log[e.id]||[];if(!L.length)return {t:'première mesure',why:''};
+  const st=exStats(e),last=st.last,best=st.best.v;
+  if(e.kind==='kg'){
+    const r=last.r;if(!numOk(r))return {t:fmtV(e,last.v),why:'Note aussi tes répétitions pour avoir une progression précise.'};
+    if(r>=e.hi){const inc=Math.max(1,Math.round(last.v*0.05*2)/2);return {t:`${fmtV(e,last.v+inc)} × ${e.lo} rép.`,why:`Tu as atteint ${e.hi} répétitions : augmente la charge et repars à ${e.lo}.`}}
+    return {t:`${fmtV(e,last.v)} × ${Math.max(r+1,e.lo)} rép.`,why:`Garde la charge et vise une répétition de plus, jusqu’à ${e.hi}.`};
+  }
+  if(e.lower){const v=Math.round(Math.min(last.v,best)*0.98*10)/10;return {t:fmtV(e,v),why:'Vise 2 % de mieux que ta meilleure performance.'}}
+  if(better(e,best,last.v)&&(best-last.v)/Math.abs(best||1)>0.1)return {t:fmtV(e,best),why:'Dernière séance en dessous : retrouve d’abord ton record.'};
+  const step=e.kind==='reps'?1:e.kind==='s'?Math.max(5,Math.round(last.v*0.05)):Math.max(1,Math.round(last.v*0.05*10)/10);
+  return {t:fmtV(e,Math.max(last.v,best)+step),why:e.kind==='reps'?'Une répétition de plus que ton record.':'Environ 5 % de plus que ton record.'};
+}
+
+/* ---------- sport : chrono de circuit ---------- */
+let CR=null;
+function circuitHtml(){
+  const ex=SP().ex,c=SP().circ;if(!ex.length)return '';
+  const sel=c.ids.length?c.ids:ex.map(e=>e.id);
+  return `<h2>Chrono de circuit</h2><form class="box" onsubmit="startCircuit(event)"><fieldset class="cfs"><legend class="mut">Exercices du circuit, dans l’ordre</legend>${ex.map(e=>`<label class="chk" for="cr-${e.id}"><input type="checkbox" id="cr-${e.id}"${sel.includes(e.id)?' checked':''}>${esc(e.name)}</label>`).join('')}</fieldset>
+<div class="form" style="margin-top:10px"><label class="fld" for="cr-work">Effort (s, 0 = à ton rythme)<input id="cr-work" type="number" min="0" max="600" value="${c.work}"></label><label class="fld" for="cr-rest">Repos entre exercices (s)<input id="cr-rest" type="number" min="0" max="600" value="${c.rest}"></label><label class="fld" for="cr-rounds">Tours<input id="cr-rounds" type="number" min="1" max="20" value="${c.rounds}"></label><label class="fld" for="cr-rr">Repos entre tours (s)<input id="cr-rr" type="number" min="0" max="900" value="${c.restRound}"></label></div>
+<div class="acts" style="margin:10px 0 0"><button class="btn pri" type="submit">Démarrer le circuit</button><span class="mut">Durée estimée : ${circMin(c,sel.length)}</span></div></form>`;
+}
+function circMin(c,n){if(!c.work)return 'variable';const s=c.rounds*(n*c.work+Math.max(0,n-1)*c.rest)+Math.max(0,c.rounds-1)*c.restRound+10;return `${Math.round(s/60)} min`}
+function startCircuit(ev){
+  ev.preventDefault();const c=SP().circ;
+  c.ids=SP().ex.filter(e=>$('cr-'+e.id)&&$('cr-'+e.id).checked).map(e=>e.id);
+  c.work=Math.max(0,+$('cr-work').value||0);c.rest=Math.max(0,+$('cr-rest').value||0);c.rounds=Math.max(1,Math.round(+$('cr-rounds').value||1));c.restRound=Math.max(0,+$('cr-rr').value||0);
+  if(!c.ids.length)return;saveDash();
+  const ph=[{k:'prep',s:10}];
+  for(let r=1;r<=c.rounds;r++){c.ids.forEach((id,j)=>{ph.push({k:'work',id,r,s:c.work});if(j<c.ids.length-1&&c.rest)ph.push({k:'rest',r,s:c.rest,next:c.ids[j+1]})});if(r<c.rounds&&c.restRound)ph.push({k:'rr',r,s:c.restRound,next:c.ids[0]})}
+  CR={ph,i:0,t0:Date.now(),paused:0,pAt:0,beeped:-1,timer:null,wl:null};
+  try{CR.ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){CR.ac=null}
+  try{navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>{if(CR)CR.wl=w}).catch(()=>{})}catch(e){}
+  openModal('<div id="crun"></div>');$('modal').classList.add('full');CR.timer=setInterval(crTick,200);crTick();
+}
+function beep(f,d){if(!CR||!CR.ac)return;try{const o=CR.ac.createOscillator(),g=CR.ac.createGain();o.frequency.value=f;o.connect(g);g.connect(CR.ac.destination);g.gain.value=.15;o.start();o.stop(CR.ac.currentTime+d)}catch(e){}}
+const exName=id=>{const e=SP().ex.find(x=>x.id===id);return e?esc(e.name):''};
+function crTick(){
+  if(!CR)return;const p=CR.ph[CR.i];if(!p){crEnd();return}
+  const el=Date.now()-CR.t0-(CR.pAt?Date.now()-CR.pAt:0),left=p.s?Math.ceil(p.s-el/1000):null;
+  if(p.s&&left<=0){CR.i++;CR.t0=Date.now();CR.beeped=-1;beep(CR.ph[CR.i]&&CR.ph[CR.i].k==='work'?880:520,.25);crTick();return}
+  if(p.s&&left<=3&&left!==CR.beeped){CR.beeped=left;beep(660,.08)}
+  const c=SP().circ,lbl=p.k==='prep'?'Prépare-toi':p.k==='work'?exName(p.id):p.k==='rest'?'Repos':'Repos entre les tours';
+  const nxt=p.k==='prep'?exName(CR.ph[1].id):p.next?exName(p.next):'';
+  const tt=p.s?(left>=60?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):String(left)):'À ton rythme',key=CR.i+'|'+!!CR.pAt;
+  if(CR.drawn===key){const t=$('crt');if(t)t.textContent=tt;return}
+  CR.drawn=key;
+  $('crun').innerHTML=`<div class="crh"><span class="mut">${p.r?`Tour ${p.r} / ${c.rounds}`:'Circuit'}</span><span class="mut">Étape ${Math.min(CR.i+1,CR.ph.length)} / ${CR.ph.length}</span></div>
+<div class="crb ${p.k}"><div class="crl">${lbl}</div><div class="crt num" id="crt" aria-live="off">${tt}</div>${nxt?`<div class="mut">Ensuite : ${nxt}</div>`:''}</div>
+<div class="acts" style="justify-content:center">${p.s?`<button class="btn" onclick="crPause()">${CR.pAt?'Reprendre':'Pause'}</button>`:''}<button class="btn pri" onclick="crNext()">${p.s?'Passer':'Terminé, suivant'}</button><button class="btn danger" onclick="crStop()">Arrêter</button></div>`;
+}
+function crPause(){if(!CR)return;if(CR.pAt){CR.t0+=Date.now()-CR.pAt;CR.pAt=0}else CR.pAt=Date.now();crTick()}
+function crNext(){if(!CR)return;CR.i++;CR.t0=Date.now();CR.pAt=0;CR.beeped=-1;beep(700,.12);crTick()}
+function crStop(){if(!CR)return;clearInterval(CR.timer);try{CR.wl&&CR.wl.release()}catch(e){}try{CR.ac&&CR.ac.close()}catch(e){}CR=null;$('modal').classList.remove('full');closeModal()}
+function crEnd(){
+  if(!CR)return;clearInterval(CR.timer);beep(990,.4);const c=SP().circ;
+  $('crun').innerHTML=`<h2 id="mtitle">Circuit terminé</h2><p class="mut">Note ce que tu as fait (ton meilleur tour), puis enregistre : tes courbes se mettent à jour.</p><form onsubmit="crSave(event)"><div class="sgrid">${c.ids.map(id=>{const e=SP().ex.find(x=>x.id===id);if(!e)return '';const pre=e.kind==='s'&&c.work?c.work:'';return `<label class="fld" for="cs-${id}">${esc(e.name)} <span class="mut">(${esc(unitOf(e)||'valeur')})</span><input id="cs-${id}" inputmode="decimal" value="${pre}" placeholder="${esc(nextTarget(e).t)}"></label>`+(e.kind==='kg'?`<label class="fld" for="csr-${id}">${esc(e.name)} : répétitions<input id="csr-${id}" inputmode="numeric"></label>`:'')}).join('')}</div><div class="acts"><button class="btn pri" type="submit">Enregistrer la séance</button><button class="btn" type="button" onclick="crStop()">Fermer sans enregistrer</button></div></form>`;
+}
+function crSave(ev){
+  ev.preventDefault();const d=TODAY();
+  for(const id of SP().circ.ids){const v=parseNum(($('cs-'+id)||{}).value||'');if(v===null)continue;const p={d,v,n:'circuit'},r=parseNum(($('csr-'+id)||{}).value||'');if(r!==null)p.r=Math.round(r);spPush(id,p)}
+  saveDash();crStop();renderSport();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('modal')&&!$('modal').hidden&&!CR)closeModal()});
+
 /* ---------- progression des cartes et répétition espacée ---------- */
+DECKS[PKEY]={title:'Mes cartes d’erreurs',key:'psi_cards_perso',data:{CATS:PCATS,C:[],ids:[],byId:{}}};
+if(!S.some(x=>x[1].includes(PKEY)))S.push(['Mes cartes d’erreurs',[PKEY]]);
+function cardKeys(k){if(k===PKEY)return DECKS[k].data.ids;const n=DECKS[k].data.C.length,r=new Array(n);for(let i=0;i<n;i++)r[i]=i;return r}
+function cardOf(k,i){return k===PKEY?DECKS[k].data.byId[i]:DECKS[k].data.C[i]}
+const validCard=(k,i)=>k===PKEY?!!DECKS[k].data.byId[i]:(+i>=0&&+i<DECKS[k].data.C.length);
 const ST={};
 function getSt(k){const key=DECKS[k].key;if(!ST[key]){let s={};try{s=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}ST[key]=s&&typeof s==='object'?s:{}}return ST[key]}
 function putSt(k){try{localStorage.setItem(DECKS[k].key,JSON.stringify(getSt(k)))}catch(e){}}
@@ -3588,22 +3820,31 @@ function saveSrs(){try{localStorage.setItem(SKEY,JSON.stringify(SRS))}catch(e){}
 function seedSrs(){
   let ch=false;const t=TODAY();
   for(const k of Object.keys(DECKS)){
-    const key=DECKS[k].key,s=getSt(k),m=SRS[key]&&typeof SRS[key]==='object'?SRS[key]:(SRS[key]={}),n=DECKS[k].data.C.length;
+    const key=DECKS[k].key,s=getSt(k),m=SRS[key]&&typeof SRS[key]==='object'?SRS[key]:(SRS[key]={});
     for(const [i,v] of Object.entries(s)){
-      if(!(+i<n)||m[i])continue;
-      if(v==='ko')m[i]={b:0,d:t,l:0};else if(v==='ok')m[i]={b:1,d:addDays(t,1+(+i%7)),l:0};else continue;
+      if(!validCard(k,i)||m[i])continue;
+      if(v==='ko')m[i]={b:0,d:t,l:0};else if(v==='ok')m[i]={b:1,d:addDays(t,1+(String(i).length+(+i||0))%7),l:0};else continue;
       ch=true;
     }
   }
   if(ch)saveSrs();
 }
 function isDue(k,i){const e=(SRS[DECKS[k].key]||{})[i];return !!(e&&e.d<=TODAY()&&getSt(k)[i])}
-function markSrs(k,i,x){
-  const key=DECKS[k].key,m=SRS[key]||(SRS[key]={}),e=m[i],t=TODAY();let b;
-  if(x==='ko')b=0;else if(!e)b=1;else if(e.d<=t)b=Math.min(e.b+1,IV.length-1);else{e.l=Date.now();saveSrs();return}
-  m[i]={b,d:addDays(t,IV[b]),l:Date.now()};saveSrs();
+const LEVELS=[['ko','Raté'],['hard','Difficile'],['good','Bien'],['easy','Facile']];
+function nextSrs(e,lv,t){
+  if(lv==='ko')return {b:0,d:t};
+  if(!e){const b={hard:1,good:2,easy:3}[lv];return {b,d:addDays(t,IV[b])}}
+  if(e.d>t)return null;
+  if(lv==='hard'){const b=Math.max(1,e.b);return {b,d:addDays(t,Math.max(1,Math.round(IV[b]/2)))}}
+  const b=Math.min(IV.length-1,e.b+(lv==='easy'?2:1));return {b,d:addDays(t,IV[b])};
 }
-function itemsOf(ids,pred){const r=[];for(const k of ids){const n=DECKS[k].data.C.length;for(let i=0;i<n;i++)if(!pred||pred(k,i))r.push([k,i])}return r}
+function ivLabel(k,i,lv){const t=TODAY(),n=nextSrs((SRS[DECKS[k].key]||{})[i],lv,t);if(!n)return '';const d=-daysTo(t)+daysTo(n.d);return d<=0?'auj.':d<30?d+' j':Math.round(d/30)+' mois'}
+function markSrs(k,i,lv){
+  const key=DECKS[k].key,m=SRS[key]||(SRS[key]={}),t=TODAY(),n=nextSrs(m[i],lv,t);
+  if(!n){m[i].l=Date.now();saveSrs();return}
+  m[i]={b:n.b,d:n.d,l:Date.now()};saveSrs();
+}
+function itemsOf(ids,pred){const r=[];for(const k of ids)for(const i of cardKeys(k))if(!pred||pred(k,i))r.push([k,i]);return r}
 const isKo=(k,i)=>getSt(k)[i]==='ko';
 const countOf=(ids,pred)=>itemsOf(ids,pred).length;
 function shuffleArr(a){for(let x=a.length-1;x>0;x--){const y=Math.floor(Math.random()*(x+1));[a[x],a[y]]=[a[y],a[x]]}return a}
@@ -3616,11 +3857,12 @@ const typeset=el=>{if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetProm
 const lnk=(href,txt,n)=>n===0?`<span class="btn sm dis" aria-disabled="true">${txt}</span>`:`<a class="btn sm" href="${href}">${txt}</a>`;
 function renderRev(){
   const all=allIds(),ne=countOf(all,isKo);
-  $('subjects').innerHTML=`<div class="acts">${lnk('#erreurs-all',`Toutes mes erreurs · ${ne}`,ne)}${lnk('#colle-all','Colle de 20 cartes, tout le programme')}</div>`+
+  $('subjects').innerHTML=`<div class="acts">${lnk('#erreurs-all',`Toutes mes erreurs · ${ne}`,ne)}${lnk('#colle-all','Colle de 20 cartes, tout le programme')}${lnk('#oral-all','Mode colle chronométré')}<button class="btn sm pri" onclick="cardModal('')">+ Carte d’erreur</button></div>`+
   S.map(([m,l],si)=>{
     if(!l.length)return `<div class="t">${m}</div><div class="empty">Aucun chapitre pour l’instant.</div>`;
+    if(l[0]===PKEY&&!cardKeys(PKEY).length)return `<div class="t">${m}</div><div class="empty">Aucune carte pour l’instant. Après un DS ou une colle, clique sur « + Carte d’erreur » pour noter ce qui t’a piégé.</div>`;
     const s=sumStat(l),nd=countOf(l,isDue),nk=countOf(l,isKo);
-    return `<div class="t">${m}<span class="secsum num">${s.ok} / ${s.n} sues</span></div><div class="acts">${lnk('#jour-'+si,`Cartes du jour · ${nd}`,nd)}${lnk('#erreurs-'+si,`À revoir · ${nk}`,nk)}${lnk('#melange-'+si,'Tout mélanger')}${lnk('#colle-'+si,'Colle de 20')}</div>`+
+    return `<div class="t">${m}<span class="secsum num">${s.ok} / ${s.n} sues</span></div><div class="acts">${lnk('#jour-'+si,`Cartes du jour · ${nd}`,nd)}${lnk('#erreurs-'+si,`À revoir · ${nk}`,nk)}${lnk('#melange-'+si,'Tout mélanger')}${lnk('#colle-'+si,'Colle de 20')}${lnk('#oral-'+si,'Mode colle')}</div>`+
       l.map(k=>{const c=deckStat(k),d=countOf([k],isDue);return `<a class="item" href="#${k}"><span>${DECKS[k].title}</span><span class="ir">${d?`<span class="due-b">${d} du jour</span>`:''}${bar(c)}<span class="pc">${pct(c.ok,c.n)} %</span><span>→</span></span></a>`}).join('');
   }).join('');
   const q=$('q');if(q&&q.value.trim().length>=2)doSearch(q.value);
@@ -3631,11 +3873,11 @@ function onSearch(v){clearTimeout(qT);qT=setTimeout(()=>doSearch(v),200)}
 function doSearch(v){
   const q=norm(v.trim()),box=$('qres');
   if(q.length<2){box.innerHTML='';$('subjects').hidden=false;return}
-  if(!IDX){IDX=[];for(const k of allIds())DECKS[k].data.C.forEach((c,i)=>IDX.push({k,i,t:norm(c[1]+' '+c[2])}))}
+  if(!IDX){IDX=[];for(const k of allIds())for(const i of cardKeys(k)){const c=cardOf(k,i);IDX.push({k,i,t:norm(c[1]+' '+c[2])})}}
   const w=q.split(/\s+/),res=IDX.filter(e=>w.every(x=>e.t.includes(x)));
   SEARCH={q:v.trim(),items:res.map(e=>[e.k,e.i]),start:0};
   box.innerHTML=`<p class="mut">${res.length?`${res.length} carte${res.length>1?'s':''} trouvée${res.length>1?'s':''}${res.length>60?' · les 60 premières sont affichées':''} · clique pour les réviser`:'Aucune carte ne contient ces mots.'}</p>`+
-    res.slice(0,60).map((e,n)=>`<button class="item res" onclick="openRes(${n})"><span><small>${esc(DECKS[e.k].title)}</small>${DECKS[e.k].data.C[e.i][1]}</span><span aria-hidden="true">→</span></button>`).join('');
+    res.slice(0,60).map((e,n)=>`<button class="item res" onclick="openRes(${n})"><span><small>${esc(DECKS[e.k].title)}</small>${cardOf(e.k,e.i)[1]}</span><span aria-hidden="true">→</span></button>`).join('');
   $('subjects').hidden=true;typeset(box);
 }
 function openRes(n){SEARCH.start=n;if(location.hash==='#recherche')route();else location.hash='recherche'}
@@ -3657,13 +3899,24 @@ function copyExport(){
 function dlExport(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([exportData()],{type:'application/json'}));a.download='progression-psi-'+TODAY()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);ioMsg('Sauvegarde téléchargée.')}
 function readImport(inp){const f=inp.files&&inp.files[0];if(!f)return;f.text().then(t=>{$('io-txt').value=t;ioMsg('Fichier chargé : clique sur « Importer et fusionner ».')})}
 function importData(o){
-  let n=0;const keys=new Map(Object.keys(DECKS).map(k=>[DECKS[k].key,k]));
+  let n=0,na=0;
+  if(o.dash&&typeof o.dash==='object'){
+    const inc=normDash(o.dash),have=new Set(DASH.agenda.map(e=>e.id));
+    for(const e of inc.agenda)if(!have.has(e.id)){DASH.agenda.push(e);na++}
+    for(const [k,v] of Object.entries(inc.act)){const o2=DASH.act[k]||{n:0,ok:0};DASH.act[k]={n:Math.max(o2.n,v.n),ok:Math.max(o2.ok,v.ok)}}
+    const isp=inc.sport,sp=DASH.sport;
+    for(const e of isp.ex){if(!sp.ex.some(x=>x.id===e.id))sp.ex.push(e);const L=sp.log[e.id]||(sp.log[e.id]=[]),ks=new Set(L.map(p=>p.d+'|'+p.v+'|'+p.n));for(const p of isp.log[e.id]||[])if(!ks.has(p.d+'|'+p.v+'|'+p.n))L.push(p);L.sort((a,b)=>a.d.localeCompare(b.d))}
+    for(const c of inc.mycards){const l=DASH.mycards.find(x=>x.id===c.id);if(!l)DASH.mycards.push(c);else if(c.del&&!l.del)Object.assign(l,{del:true,q:'',a:''})}
+    const hg=new Set(DASH.grades.map(g=>g.id));for(const g of inc.grades)if(!hg.has(g.id))DASH.grades.push(g);DASH.grades.sort((a,b)=>a.d.localeCompare(b.d));
+    saveDash();rebuildPerso();
+  }
+  const keys=new Map(Object.keys(DECKS).map(k=>[DECKS[k].key,k]));
   for(const [key,st] of Object.entries(o.cards||{})){
     const k=keys.get(key);if(!k||!st||typeof st!=='object')continue;
-    const L=getSt(k),sl=SRS[key]||(SRS[key]={}),si=(o.srs&&o.srs[key])||{},nC=DECKS[k].data.C.length;
+    const L=getSt(k),sl=SRS[key]||(SRS[key]={}),si=(o.srs&&o.srs[key])||{};
     for(const [ci,v] of Object.entries(st)){
-      if(!(+ci<nC)||(v!=='ok'&&v!=='ko'))continue;
-      const eI=si[ci]&&typeof si[ci]==='object'&&/^\d{4}-\d\d-\d\d$/.test(si[ci].d||'')?si[ci]:null,eL=sl[ci];
+      if(!validCard(k,ci)||(v!=='ok'&&v!=='ko'))continue;
+      const eI=si[ci]&&typeof si[ci]==='object'&&isDate(si[ci].d)?si[ci]:null,eL=sl[ci];
       if(L[ci]&&((eI&&+eI.l||0)<=(eL&&+eL.l||0)))continue;
       if(L[ci]===v&&JSON.stringify(eL)===JSON.stringify(eI))continue;
       L[ci]=v;if(eI)sl[ci]={b:Math.min(IV.length-1,Math.max(0,Math.round(+eI.b||0))),d:eI.d,l:+eI.l||0};else delete sl[ci];n++;
@@ -3671,15 +3924,6 @@ function importData(o){
     putSt(k);
   }
   saveSrs();seedSrs();
-  let na=0;
-  if(o.dash&&typeof o.dash==='object'){
-    const inc=normDash(o.dash),have=new Set(DASH.agenda.map(e=>e.id));
-    for(const e of inc.agenda)if(!have.has(e.id)){DASH.agenda.push(e);na++}
-    for(const [k,v] of Object.entries(inc.act)){const o2=DASH.act[k]||{n:0,ok:0};DASH.act[k]={n:Math.max(o2.n,v.n),ok:Math.max(o2.ok,v.ok)}}
-    const isp=inc.sport,sp=DASH.sport;
-    for(const e of isp.ex){if(!sp.ex.some(x=>x.id===e.id))sp.ex.push(e);const L=sp.log[e.id]||(sp.log[e.id]=[]),ks=new Set(L.map(p=>p.d+'|'+p.v+'|'+p.n));for(const p of isp.log[e.id]||[])if(!ks.has(p.d+'|'+p.v+'|'+p.n))L.push(p);L.sort((a,b)=>a.d.localeCompare(b.d))}
-    saveDash();
-  }
   importData.added=na;return n;
 }
 function doImport(){
@@ -3688,22 +3932,27 @@ function doImport(){
   const n=importData(o);$('io-txt').value='';renderStats();const na=importData.added||0;ioMsg(`Import terminé : ${n} carte${n>1?'s':''} mise${n>1?'s':''} à jour, ${na} échéance${na>1?'s':''} ajoutée${na>1?'s':''} à l’agenda.`);
 }
 
-/* ---------- séance de révision (un chapitre ou un mélange) ---------- */
-let SES=null,cat=0,mode='',i=0,flipped=false,det=-1,ord=[],swiped=0;
+/* ---------- séance de révision (un chapitre, un mélange ou une colle chronométrée) ---------- */
+let SES=null,cat=0,mode='',i=0,flipped=false,det=-1,ord=[],swiped=0,oralT=null;
 const VIEWS={'':'dash',revisions:'rev',stats:'stats',agenda:'agenda',sport:'sport'};
+const lastCat=k=>{const C=DECKS[k].data.CATS;return /Réflexes/.test(C[C.length-1])?C.length-1:-1};
+function oralItems(ids){const all=itemsOf(ids),cours=all.filter(([k,ci])=>cardOf(k,ci)[0]!==lastCat(k));return shuffleArr(cours.length>=8?cours:all).slice(0,8)}
 function mixSession(h){
   let m;
   if(h==='recherche')return SEARCH&&SEARCH.items.length?{title:`Recherche « ${SEARCH.q} »`,items:SEARCH.items,start:SEARCH.start}:null;
-  if((m=h.match(/^(jour|erreurs|melange|colle)-(all|\d+)$/))){
+  if((m=h.match(/^(jour|erreurs|melange|colle|oral)-(all|\d+)$/))){
     const ids=secIds(m[2]);if(!ids.length)return null;const nm=secName(m[2]);
     if(m[1]==='jour')return {title:`Cartes du jour · ${nm}`,items:itemsOf(ids,isDue),shuffle:true,mode:'due'};
     if(m[1]==='erreurs')return {title:`À revoir · ${nm}`,items:itemsOf(ids,isKo),shuffle:true,mode:'err'};
     if(m[1]==='melange')return {title:`Tout mélangé · ${nm}`,items:itemsOf(ids),shuffle:true};
+    if(m[1]==='oral')return {title:`Mode colle · ${nm}`,items:oralItems(ids),oral:true};
     return {title:`Colle de 20 cartes · ${nm}`,items:shuffleArr(itemsOf(ids)).slice(0,20),colle:true};
   }
-  if((m=h.match(/^ds-([a-z0-9]+)$/i))){
-    const e=DASH.agenda.find(x=>x.id===m[1]);if(!e)return null;
-    const ids=scopeSecs(e.sec).flatMap(x=>x[1]),g=[[],[],[],[]];
+  if((m=h.match(/^(ds|oralev)-([a-z0-9]+)$/i))){
+    const e=DASH.agenda.find(x=>x.id===m[2]);if(!e)return null;
+    const ids=scopeSecs(e.sec).flatMap(x=>x[1]);
+    if(m[1]==='oralev')return ids.length?{title:`Simulation : ${e.title}`,items:oralItems(ids),oral:true}:null;
+    const g=[[],[],[],[]];
     for(const [k,ci] of itemsOf(ids)){const v=getSt(k)[ci];g[v==='ko'?0:isDue(k,ci)?1:!v?2:3].push([k,ci])}
     return {title:`Réviser pour : ${e.title}`,items:g.flatMap(shuffleArr),ds:true};
   }
@@ -3711,44 +3960,55 @@ function mixSession(h){
 }
 function route(){
   const h=location.hash.slice(1);
-  const ses=DECKS[h]?{single:h,title:DECKS[h].title,items:DECKS[h].data.C.map((_,ci)=>[h,ci])}:mixSession(h);
-  const v=ses?'rev':(VIEWS[h]||(h==='recherche'||/^(jour|erreurs|melange|colle)-/.test(h)?'rev':'dash'));
+  const ses=DECKS[h]?{single:h,title:DECKS[h].title,items:cardKeys(h).map(ci=>[h,ci])}:mixSession(h);
+  const v=ses?'rev':(VIEWS[h]||(h==='recherche'||/^(jour|erreurs|melange|colle|oral|oralev|ds)-/.test(h)?'rev':'dash'));
   for(const n of ['dash','rev','stats','agenda','sport'])$('v-'+n).hidden=!!ses||v!==n;
   $('deck').hidden=!ses;
   document.querySelectorAll('.tabs a').forEach(a=>{if(a.dataset.v===v){a.setAttribute('aria-current','page');if(a.scrollIntoView)a.scrollIntoView({block:'nearest',inline:'nearest'})}else a.removeAttribute('aria-current')});
-  delId='';SES=ses;
+  delId='';SES=ses;clearInterval(oralT);oralT=null;
   if(!ses){curView=v;refreshView();window.scrollTo(0,0);return}
   cat=0;mode=ses.mode||'';flipped=false;det=-1;ord=ses.items.map((_,n)=>n);if(ses.shuffle)shuffleArr(ord);i=ses.start||0;
+  if(ses.oral){ses.ans={};ses.t0=Date.now();ses.cur=-1;oralT=setInterval(oralTick,500)}
   $('dtitle').textContent='Révisions PSI — '+ses.title;
   render();window.scrollTo(0,0);
   if(ses.single&&DASH.last!==h){DASH.last=h;saveDash()}
 }
-const deck=()=>ord.filter(n=>{const [k,ci]=SES.items[n];if(SES.single&&cat&&DECKS[k].data.C[ci][0]!==cat)return false;if(mode==='err')return isKo(k,ci);if(mode==='due')return isDue(k,ci);return true});
+const deck=()=>ord.filter(n=>{const [k,ci]=SES.items[n];if(SES.oral)return !(n in SES.ans);if(SES.single&&cat&&cardOf(k,ci)[0]!==cat)return false;if(mode==='err')return isKo(k,ci);if(mode==='due')return isDue(k,ci);return true});
+const mmss=ms=>{const s=Math.max(0,Math.floor(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+function oralTick(){const el=$('chrono');if(!el||!SES||!SES.oral)return;const q=Date.now()-SES.qStart;el.innerHTML=`<span>Question ${Object.keys(SES.ans).length+1} / ${SES.items.length}</span><b class="num${q>120000?' late':''}">${mmss(q)}</b><span class="mut num">total ${mmss(Date.now()-SES.t0)}</span>`}
+function oralSummary(){
+  clearInterval(oralT);oralT=null;const a=Object.values(SES.ans),tot=Date.now()-SES.t0,cnt=lv=>a.filter(x=>x===lv).length;
+  return `<div class="card"><div class="t">Colle terminée</div><div class="b">${SES.items.length} questions en <b>${mmss(tot)}</b> (${mmss(tot/SES.items.length)} par question en moyenne).</div><div class="tiles" style="margin-top:12px">${LEVELS.map(([lv,l])=>`<div class="tile"><small>${l}</small><b>${cnt(lv)}</b></div>`).join('')}</div><div class="acts" style="margin-top:14px"><button class="btn pri" onclick="route()">Nouvelle colle</button><a class="btn" href="#revisions">Retour aux révisions</a></div></div>`;
+}
 function render(){
   if(!SES)return;
   const d=deck();if(i>=d.length)i=0;
   const its=SES.items,nd=its.filter(([k,ci])=>isDue(k,ci)).length,cats=SES.single?DECKS[SES.single].data.CATS:['Toutes'];
-  $('chips').innerHTML=cats.map((c,n)=>`<button class="chip${n===cat&&!mode?' on':''}" onclick="setCat(${n})">${c}</button>`).join('')+`<button class="chip${mode==='due'?' on':''}" onclick="setMode('due')">Cartes du jour · ${nd}</button>`;
+  $('chips').innerHTML=SES.oral?`<div class="chrono" id="chrono"></div>`:cats.map((c,n)=>`<button class="chip${n===cat&&!mode?' on':''}" onclick="setCat(${n})">${c}</button>`).join('')+`<button class="chip${mode==='due'?' on':''}" onclick="setMode('due')">Cartes du jour · ${nd}</button>`;
   const app=$('app');
   if(!d.length){
-    app.innerHTML=`<div class="card">${mode==='due'?'Aucune carte à réviser aujourd’hui ici. Reviens demain, ou découvre de nouvelles cartes dans « Toutes ».':mode==='err'?'Plus aucune carte à revoir ici. Bravo !':'Aucune carte ici. Bravo, ou choisis une autre catégorie.'}</div>`;
+    app.innerHTML=SES.oral?oralSummary():`<div class="card">${mode==='due'?'Aucune carte à réviser aujourd’hui ici. Reviens demain, ou découvre de nouvelles cartes dans « Toutes ».':mode==='err'?'Plus aucune carte à revoir ici. Bravo !':SES.single===PKEY?'Aucune carte pour l’instant. Ajoute ta première carte d’erreur avec le bouton ci-dessous.':'Aucune carte ici. Bravo, ou choisis une autre catégorie.'}</div>`;
   }else{
-    const n=d[i],[k,ci]=its[n],DK=DECKS[k],c=DK.data.C[ci],s=getSt(k)[ci],p=(flipped?c[2]:c[1]).split('<br><b>Détail :</b>'),o=det===n&&flipped&&p[1];
+    const n=d[i],[k,ci]=its[n],DK=DECKS[k],c=cardOf(k,ci),s=getSt(k)[ci],p=(flipped?c[2]:c[1]).split('<br><b>Détail :</b>'),o=det===n&&flipped&&p[1];
+    if(SES.oral&&SES.cur!==n){SES.cur=n;SES.qStart=Date.now()}
     const lab=(SES.single?'':esc(shortT(DK.title))+' · ')+DK.data.CATS[c[0]];
-    app.innerHTML=`<div class="card" onclick="flip()"><div class="meta"><span>${lab} · ${i+1}/${d.length}</span><span>${s==='ok'?'✓ su':s==='ko'?'✗ à revoir':'nouvelle'}${isDue(k,ci)?' · du jour':''}</span></div><div class="t">${flipped?'Réponse':'Question'}</div><div class="b">${p[0]}</div>${p[1]&&flipped?'<div style="margin-top:12px"><button class="chip" onclick="event.stopPropagation();tg()">'+(o?'Masquer':'Voir')+' le détail</button></div>':''}${o?'<div class="dt">'+p[1]+'</div>':''}</div>
-    <div class="row"><button class="act ko" onclick="mark('ko')">✗ À revoir</button><button class="act" onclick="mv(1)">Passer</button><button class="act ok" onclick="mark('ok')">✓ Su</button></div>`;
+    app.innerHTML=`<div class="card" onclick="flip()"><div class="meta"><span>${lab} · ${i+1}/${d.length}</span><span>${s==='ok'?'✓ su':s==='ko'?'✗ à revoir':'nouvelle'}${isDue(k,ci)?' · du jour':''}</span></div><div class="t">${flipped?'Réponse':'Question'}</div><div class="b">${p[0]}</div>${p[1]&&flipped?'<div style="margin-top:12px"><button class="chip" onclick="event.stopPropagation();tg()">'+(o?'Masquer':'Voir')+' le détail</button></div>':''}${o?'<div class="dt">'+p[1]+'</div>':''}${!flipped?`<div class="hint mut">${SES.oral?'Réponds à voix haute, puis touche la carte pour voir la réponse.':'Touche la carte pour voir la réponse.'}</div>`:''}</div>
+    <div class="row lv">${LEVELS.map(([lv,l],j)=>`<button class="act lv-${lv}" onclick="mark('${lv}')" title="Touche ${j+1}">${l}<small>${ivLabel(k,ci,lv)}</small></button>`).join('')}</div>
+    ${k===PKEY?`<div class="acts" style="margin-top:8px"><button class="btn sm" onclick="cardModal('${ci}')">Modifier cette carte</button></div>`:''}`;
     attachSwipe(app.querySelector('.card'));
+    if(SES.oral)oralTick();
   }
   const no=its.filter(([k,ci])=>getSt(k)[ci]==='ok').length,nk=its.filter(([k,ci])=>isKo(k,ci)).length;
-  $('stat').innerHTML=`<span>Su : ${no}</span><span>À revoir : ${nk}</span><span>Restant : ${its.length-no-nk}</span>`+
-    `<button onclick="setMode('err')">Refaire mes erreurs (${nk})</button><button onclick="shuf()">Mélanger</button>`+(SES.colle?'<button onclick="route()">Nouvelle colle</button>':'')+(SES.single?'<button onclick="rst()">Réinitialiser</button>':'');
+  const pm=SES.single&&SES.single!==PKEY?secToMat((S.find(x=>x[1].includes(SES.single))||[''])[0]):'';
+  $('stat').innerHTML=(SES.oral?'':`<span>Su : ${no}</span><span>À revoir : ${nk}</span><span>Restant : ${its.length-no-nk}</span>`+
+    `<button onclick="mv(1)">Passer →</button><button onclick="setMode('err')">Refaire mes erreurs (${nk})</button><button onclick="shuf()">Mélanger</button>`)+(SES.colle?'<button onclick="route()">Nouvelle colle</button>':'')+`<button onclick="cardModal('',{mat:'${pm}'})">+ Carte d’erreur</button>`+(SES.single&&!SES.oral?'<button onclick="rst()">Réinitialiser</button>':'');
   typeset(app);
 }
 function attachSwipe(el){
   if(!el)return;let x0=0,y0=0,dx=0,on=false,hz=false;
   el.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;x0=e.touches[0].clientX;y0=e.touches[0].clientY;dx=0;on=true;hz=false;el.style.transition='none'},{passive:true});
   el.addEventListener('touchmove',e=>{if(!on)return;const t=e.touches[0];dx=t.clientX-x0;const dy=t.clientY-y0;if(!hz&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy))hz=true;if(hz){el.style.transform=`translateX(${dx}px) rotate(${dx/30}deg)`;el.classList.toggle('sw-ok',dx>70);el.classList.toggle('sw-ko',dx<-70)}},{passive:true});
-  const end=()=>{if(!on)return;on=false;el.style.transition='';if(hz){swiped=Date.now();if(dx>70){mark('ok');return}if(dx<-70){mark('ko');return}}el.style.transform='';el.classList.remove('sw-ok','sw-ko')};
+  const end=()=>{if(!on)return;on=false;el.style.transition='';if(hz){swiped=Date.now();if(dx>70){mark('good');return}if(dx<-70){mark('ko');return}}el.style.transform='';el.classList.remove('sw-ok','sw-ko')};
   el.addEventListener('touchend',end);el.addEventListener('touchcancel',end);
 }
 function setCat(n){cat=n;mode='';i=0;flipped=false;render()}
@@ -3756,24 +4016,28 @@ function setMode(m){mode=mode===m?'':m;cat=0;i=0;flipped=false;render()}
 function flip(){if(Date.now()-swiped<450)return;flipped=!flipped;render()}
 function tg(){const n=deck()[i];det=det===n?-1:n;render()}
 function mv(s){const n=deck().length||1;i=(i+s+n)%n;flipped=false;render()}
-function mark(x){
-  const d=deck();
-  if(d.length){const [k,ci]=SES.items[d[i]];getSt(k)[ci]=x;putSt(k);markSrs(k,ci,x);logAct(x);if((mode==='err'||mode==='due')&&x==='ok'){flipped=false;render();return}}
+function mark(lv){
+  if(lv==='ok')lv='good';const d=deck();
+  if(d.length){
+    const n=d[i],[k,ci]=SES.items[n],x=lv==='ko'?'ko':'ok';getSt(k)[ci]=x;putSt(k);markSrs(k,ci,lv);logAct(x);
+    if(SES.oral){SES.ans[n]=lv;flipped=false;render();return}
+    if((mode==='err'||mode==='due')&&x==='ok'){flipped=false;render();return}
+  }
   mv(1);
 }
 function shuf(){shuffleArr(ord);i=0;flipped=false;render()}
 function rst(){if(!SES||!SES.single)return;const k=SES.single;ST[DECKS[k].key]={};putSt(k);SRS[DECKS[k].key]={};saveSrs();mode='';i=0;flipped=false;render()}
-document.addEventListener('keydown',e=>{if(!SES)return;if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key===' '){e.preventDefault();flip()}else if(e.key==='ArrowRight')mv(1);else if(e.key==='ArrowLeft')mv(-1)});
-window.addEventListener('hashchange',route);
+document.addEventListener('keydown',e=>{if(!SES||($('modal')&&!$('modal').hidden))return;if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key===' '){e.preventDefault();flip()}else if(e.key==='ArrowRight')mv(1);else if(e.key==='ArrowLeft')mv(-1);else if(/^[1-4]$/.test(e.key)&&deck().length)mark(LEVELS[+e.key-1][0])});
+window.addEventListener('hashchange',()=>{if(CR)crStop();closeModal();route()});
 window.addEventListener('storage',e=>{
-  if(e.key===DKEY){try{DASH=normDash(JSON.parse(e.newValue||'null'))}catch(x){}}
+  if(e.key===DKEY){try{DASH=normDash(JSON.parse(e.newValue||'null'))}catch(x){}rebuildPerso()}
   else if(e.key===SKEY){try{SRS=JSON.parse(e.newValue||'{}')||{}}catch(x){}}
   else if(e.key&&e.key.startsWith('psi_cards'))delete ST[e.key];
   if(!SES)refreshView();
 });
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!SES)refreshView()});
 if('serviceWorker' in navigator&&/github\.io$/.test(location.hostname))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-seedSrs();route();paintSync();initSync(3);
+rebuildPerso();seedSrs();route();paintSync();initSync(3);
 </script>
 
 </body></html>
