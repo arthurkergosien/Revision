@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#2d4fd6"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Révisions PSI"></head><body>
 <title>Révisions PSI</title>
 <style>
 :root{--bg:#fafaf7;--fg:#1c1c1a;--mut:#6b6b66;--card:#fff;--bd:#e0dfd8;--ok:#1d7a46;--ko:#b3402a;--ac:#2d4fd6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -139,6 +139,29 @@ textarea{resize:vertical;min-height:60px}
  .cnt{white-space:normal}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 12px}
+a.btn{text-decoration:none;color:var(--fg);display:inline-block}
+label.btn{cursor:pointer;color:var(--fg)}
+.btn.dis{opacity:.45;cursor:default}
+.due-b{font-size:12px;color:var(--ac);border:1px solid var(--ac);border-radius:99px;padding:0 7px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.search{margin:4px 0 12px}
+button.item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 16px;color:var(--fg);margin-bottom:8px;font-size:16px;line-height:1.5}
+button.item:hover{border-color:var(--ac)}
+.res>span:first-child{min-width:0;overflow-wrap:anywhere}
+.res small{display:block;font-size:12px;color:var(--mut)}
+.res>span:last-child{color:var(--ac)}
+.io textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.card{touch-action:pan-y;transition:transform .18s ease,border-color .1s}
+.card.sw-ok{border-color:var(--ok)}
+.card.sw-ko{border-color:var(--ko)}
+.touch-only{display:none}
+@media(hover:none) and (pointer:coarse){.touch-only{display:inline}}
+@media(max-width:560px){
+ #deck .row{position:sticky;bottom:0;z-index:4;background:var(--bg);margin:14px -16px 0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--bd);flex-wrap:nowrap;gap:8px}
+ #deck .act{min-width:0;min-height:54px;font-size:16px}
+ #deck .chip{padding:6px 12px}
+ .item .due-b{display:none}
+}
 </style>
 <header class="top"><div class="top-in">
 <div class="brand"><span>Révisions PSI</span><span class="sync" id="sync">Enregistré sur cet appareil</span></div>
@@ -151,6 +174,8 @@ textarea{resize:vertical;min-height:60px}
 <h1>Révisions</h1>
 <div class="sub">Flashcards par matière et par chapitre. Chaque chapitre garde sa propre progression.</div>
 <div class="legend"><span><i class="b-ok"></i>Su</span><span><i class="b-ko"></i>À revoir</span><span><i class="b-rest"></i>Pas encore vue</span></div>
+<label class="fld search" for="q">Rechercher dans toutes les cartes<input id="q" type="search" placeholder="Ex. Gauss, Poynting, effet de peau" autocomplete="off" oninput="onSearch(this.value)"></label>
+<div id="qres"></div>
 <div id="subjects"></div>
 </section>
 <section id="v-stats" hidden></section>
@@ -158,7 +183,7 @@ textarea{resize:vertical;min-height:60px}
 <div id="deck" hidden>
 <a class="back" href="#revisions">← Révisions</a>
 <h1 id="dtitle"></h1>
-<div class="sub">Clique sur la carte pour la retourner. Espace : retourner · ← → : naviguer</div>
+<div class="sub">Clique sur la carte pour la retourner. Espace : retourner · ← → : naviguer<span class="touch-only"> · Glisse la carte vers la droite si tu la sais, vers la gauche pour la revoir</span></div>
 <div class="chips" id="chips"></div>
 <div id="app"></div>
 <div class="stat" id="stat"></div>
@@ -3275,8 +3300,7 @@ async function initSync(tries){
 
 /* ---------- statistiques ---------- */
 function deckStat(k){
-  const d=DECKS[k],n=d.data.C.length;let s={};
-  try{s=JSON.parse(localStorage.getItem(d.key)||'{}')||{}}catch(e){}
+  const n=DECKS[k].data.C.length,s=getSt(k);
   let ok=0,ko=0;for(const [i,v] of Object.entries(s)){if(!(+i<n))continue;if(v==='ok')ok++;else if(v==='ko')ko++}
   return {n,ok,ko,rest:n-ok-ko};
 }
@@ -3307,14 +3331,16 @@ function evRow(e,opts){
   if(!past&&f.s.n)h+=`<div class="meta-l"><span class="state ${f.state[0]}">${f.state[1]}</span><span class="mut num">${scope} : ${f.todo} cartes à travailler${f.days>0&&f.todo?` · ${f.per}/jour nécessaires · ton rythme ${Math.round(f.p)}/jour`:''}</span></div>`;
   if(e.note)h+=`<div class="mut">${esc(e.note)}</div>`;
   h+='</div>';
-  if(opts&&opts.edit)h+=`<div class="ev-a"><button class="btn sm" onclick="setMain('${e.id}')" aria-pressed="${main}">${main?'Principale ✓':'Définir principale'}</button><button class="btn sm" onclick="editEv('${e.id}')">Modifier</button><button class="btn sm danger" onclick="delEv('${e.id}')">${delId===e.id?'Confirmer ?':'Supprimer'}</button></div>`;
+  const rv=!past&&f.todo?`<a class="btn sm pri" href="#ds-${e.id}">Réviser (${f.todo})</a>`:'';
+  if(!(opts&&opts.edit)&&rv)h+=`<div class="ev-a">${rv}</div>`;
+  if(opts&&opts.edit)h+=`<div class="ev-a">${rv}<button class="btn sm" onclick="setMain('${e.id}')" aria-pressed="${main}">${main?'Principale ✓':'Définir principale'}</button><button class="btn sm" onclick="editEv('${e.id}')">Modifier</button><button class="btn sm danger" onclick="delEv('${e.id}')">${delId===e.id?'Confirmer ?':'Supprimer'}</button></div>`;
   return h+'</div>';
 }
 function upcoming(){return DASH.agenda.filter(e=>daysTo(e.date)>=0).sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title))}
 
 /* ---------- vues ---------- */
 let curView='dash',custOpen=false,editId='',delId='',calM=null;
-function refreshView(){if(D)return;({dash:renderDash,rev:renderRev,stats:renderStats,agenda:renderAgenda})[curView]()}
+function refreshView(){if(SES)return;({dash:renderDash,rev:renderRev,stats:renderStats,agenda:renderAgenda})[curView]()}
 function renderDash(){
   const a=sumStat(allIds()),t=dayAct(TODAY()),g=DASH.prefs.goal,W=DASH.prefs.w;
   let h=`<div class="vhead"><div><h1>Tableau de bord</h1><div class="sub" style="margin:0">${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></div><button class="btn" aria-expanded="${custOpen}" aria-controls="cust" onclick="custOpen=!custOpen;renderDash()">${custOpen?'Fermer':'Personnaliser'}</button></div>`;
@@ -3342,12 +3368,6 @@ function renderDash(){
   if(!Object.values(W).some(Boolean)&&!custOpen)h+=`<div class="empty">Tous les blocs sont masqués. Clique sur « Personnaliser » pour en réafficher.</div>`;
   $('v-dash').innerHTML=h;
 }
-function renderRev(){
-  $('subjects').innerHTML=S.map(([m,l])=>{
-    const s=sumStat(l);
-    return `<div class="t">${m}${l.length?`<span class="secsum num">${s.ok} / ${s.n} sues</span>`:''}</div>`+(l.length?l.map(k=>{const c=deckStat(k);return `<a class="item" href="#${k}"><span>${DECKS[k].title}</span><span class="ir">${bar(c)}<span class="pc">${pct(c.ok,c.n)} %</span><span>→</span></span></a>`}).join(''):'<div class="empty">Aucun chapitre pour l’instant.</div>');
-  }).join('');
-}
 function renderStats(){
   const a=sumStat(allIds()),N=30,days=[];
   for(let i=N-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const k=ymd(d);days.push([k,dayAct(k)])}
@@ -3367,6 +3387,7 @@ function renderStats(){
     h+=`<details class="srow"><summary><b>${m}</b>${bar(s)}<span class="cnt"><b>${pct(s.ok,s.n)} %</b> · ${s.ok}/${s.n} · ${s.ko} à revoir</span></summary>`+
       l.map(k=>{const c=deckStat(k);return `<a class="crow" href="#${k}"><span>${DECKS[k].title}</span>${bar(c)}<span class="cnt"><b>${pct(c.ok,c.n)} %</b> · ${c.ok}/${c.n} · ${c.ko} à rev.</span></a>`}).join('')+'</details>';
   }
+  h+=ioHtml();
   $('v-stats').innerHTML=h;
 }
 function actCap(i){const el=$('actc');if(!el)return;if(i<0){el.textContent=window.ACTDEF;return}const [k,v]=window.ACT[i];el.textContent=`${fDate(k,{weekday:'long',day:'numeric',month:'long'})} : ${v.n} carte${v.n>1?'s':''} révisée${v.n>1?'s':''}, dont ${v.ok} marquée${v.ok>1?'s':''} « su »`}
@@ -3413,51 +3434,196 @@ function delEv(id){
 function setMain(id,fromSelect){DASH.prefs.main=fromSelect?id:(DASH.prefs.main===id?'':id);saveDash();refreshView()}
 function setGoal(v){DASH.prefs.goal=Math.min(1000,Math.max(1,Math.round(+v||40)));saveDash();renderDash()}
 function setW(k,v){DASH.prefs.w[k]=!!v;saveDash();renderDash()}
+/* ---------- progression des cartes et répétition espacée ---------- */
+const ST={};
+function getSt(k){const key=DECKS[k].key;if(!ST[key]){let s={};try{s=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}ST[key]=s&&typeof s==='object'?s:{}}return ST[key]}
+function putSt(k){try{localStorage.setItem(DECKS[k].key,JSON.stringify(getSt(k)))}catch(e){}}
+const SKEY='psi_srs',IV=[0,1,3,7,14,30,60];
+let SRS={};try{SRS=JSON.parse(localStorage.getItem(SKEY)||'{}')||{}}catch(e){}
+if(!SRS||typeof SRS!=='object')SRS={};
+const addDays=(s,n)=>{const d=pYmd(s);d.setDate(d.getDate()+n);return ymd(d)};
+function saveSrs(){try{localStorage.setItem(SKEY,JSON.stringify(SRS))}catch(e){}}
+function seedSrs(){
+  let ch=false;const t=TODAY();
+  for(const k of Object.keys(DECKS)){
+    const key=DECKS[k].key,s=getSt(k),m=SRS[key]&&typeof SRS[key]==='object'?SRS[key]:(SRS[key]={}),n=DECKS[k].data.C.length;
+    for(const [i,v] of Object.entries(s)){
+      if(!(+i<n)||m[i])continue;
+      if(v==='ko')m[i]={b:0,d:t,l:0};else if(v==='ok')m[i]={b:1,d:addDays(t,1+(+i%7)),l:0};else continue;
+      ch=true;
+    }
+  }
+  if(ch)saveSrs();
+}
+function isDue(k,i){const e=(SRS[DECKS[k].key]||{})[i];return !!(e&&e.d<=TODAY()&&getSt(k)[i])}
+function markSrs(k,i,x){
+  const key=DECKS[k].key,m=SRS[key]||(SRS[key]={}),e=m[i],t=TODAY();let b;
+  if(x==='ko')b=0;else if(!e)b=1;else if(e.d<=t)b=Math.min(e.b+1,IV.length-1);else{e.l=Date.now();saveSrs();return}
+  m[i]={b,d:addDays(t,IV[b]),l:Date.now()};saveSrs();
+}
+function itemsOf(ids,pred){const r=[];for(const k of ids){const n=DECKS[k].data.C.length;for(let i=0;i<n;i++)if(!pred||pred(k,i))r.push([k,i])}return r}
+const isKo=(k,i)=>getSt(k)[i]==='ko';
+const countOf=(ids,pred)=>itemsOf(ids,pred).length;
+function shuffleArr(a){for(let x=a.length-1;x>0;x--){const y=Math.floor(Math.random()*(x+1));[a[x],a[y]]=[a[y],a[x]]}return a}
+const secIds=n=>n==='all'?allIds():(S[+n]?S[+n][1]:[]);
+const secName=n=>n==='all'?'toutes les sections':S[+n][0].replace('Physique — ','');
+const shortT=t=>t.split(' — ')[0];
+const typeset=el=>{if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([el]).catch(()=>{})};
 
-/* ---------- flashcards (inchangé, plus le suivi d’activité) ---------- */
-let D=null,CATS=[],C=[],KEY='',st={},cat=0,err=false,i=0,flipped=false,det=-1,ord=[];
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
+/* ---------- vue Révisions : sessions mélangées et recherche ---------- */
+const lnk=(href,txt,n)=>n===0?`<span class="btn sm dis" aria-disabled="true">${txt}</span>`:`<a class="btn sm" href="${href}">${txt}</a>`;
+function renderRev(){
+  const all=allIds(),ne=countOf(all,isKo);
+  $('subjects').innerHTML=`<div class="acts">${lnk('#erreurs-all',`Toutes mes erreurs · ${ne}`,ne)}${lnk('#colle-all','Colle de 20 cartes, tout le programme')}</div>`+
+  S.map(([m,l],si)=>{
+    if(!l.length)return `<div class="t">${m}</div><div class="empty">Aucun chapitre pour l’instant.</div>`;
+    const s=sumStat(l),nd=countOf(l,isDue),nk=countOf(l,isKo);
+    return `<div class="t">${m}<span class="secsum num">${s.ok} / ${s.n} sues</span></div><div class="acts">${lnk('#jour-'+si,`Cartes du jour · ${nd}`,nd)}${lnk('#erreurs-'+si,`À revoir · ${nk}`,nk)}${lnk('#melange-'+si,'Tout mélanger')}${lnk('#colle-'+si,'Colle de 20')}</div>`+
+      l.map(k=>{const c=deckStat(k),d=countOf([k],isDue);return `<a class="item" href="#${k}"><span>${DECKS[k].title}</span><span class="ir">${d?`<span class="due-b">${d} du jour</span>`:''}${bar(c)}<span class="pc">${pct(c.ok,c.n)} %</span><span>→</span></span></a>`}).join('');
+  }).join('');
+  const q=$('q');if(q&&q.value.trim().length>=2)doSearch(q.value);
+}
+const norm=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+let IDX=null,qT=null,SEARCH=null;
+function onSearch(v){clearTimeout(qT);qT=setTimeout(()=>doSearch(v),200)}
+function doSearch(v){
+  const q=norm(v.trim()),box=$('qres');
+  if(q.length<2){box.innerHTML='';$('subjects').hidden=false;return}
+  if(!IDX){IDX=[];for(const k of allIds())DECKS[k].data.C.forEach((c,i)=>IDX.push({k,i,t:norm(c[1]+' '+c[2])}))}
+  const w=q.split(/\s+/),res=IDX.filter(e=>w.every(x=>e.t.includes(x)));
+  SEARCH={q:v.trim(),items:res.map(e=>[e.k,e.i]),start:0};
+  box.innerHTML=`<p class="mut">${res.length?`${res.length} carte${res.length>1?'s':''} trouvée${res.length>1?'s':''}${res.length>60?' · les 60 premières sont affichées':''} · clique pour les réviser`:'Aucune carte ne contient ces mots.'}</p>`+
+    res.slice(0,60).map((e,n)=>`<button class="item res" onclick="openRes(${n})"><span><small>${esc(DECKS[e.k].title)}</small>${DECKS[e.k].data.C[e.i][1]}</span><span aria-hidden="true">→</span></button>`).join('');
+  $('subjects').hidden=true;typeset(box);
+}
+function openRes(n){SEARCH.start=n;if(location.hash==='#recherche')route();else location.hash='recherche'}
+
+/* ---------- sauvegarde et transfert ---------- */
+const inFrame=(()=>{try{return window.self!==window.top}catch(e){return true}})();
+function exportData(){const cards={};for(const k of Object.keys(DECKS))cards[DECKS[k].key]=getSt(k);return JSON.stringify({app:'revisions-psi',v:1,date:new Date().toISOString(),cards,srs:SRS,dash:DASH})}
+function ioHtml(){return `<h2>Sauvegarde et transfert</h2><div class="box io"><p class="mut" style="margin:0 0 10px">Ta progression est enregistrée dans ce navigateur, séparément pour chaque appareil et chaque adresse du site. Pour la retrouver ailleurs : copie ton code ici, puis colle-le dans la même zone sur l’autre appareil.</p>
+<div class="acts"><button class="btn pri" onclick="copyExport()">Copier ma progression</button>${inFrame?'':'<button class="btn" onclick="dlExport()">Télécharger une sauvegarde</button>'}</div>
+<label class="fld" for="io-txt">Importer une progression (code copié ou fichier de sauvegarde)<textarea id="io-txt" rows="3" placeholder="Colle ici le code copié sur ton autre appareil"></textarea></label>
+<div class="acts" style="margin-top:8px"><label class="btn" for="io-file">Choisir un fichier…</label><input type="file" id="io-file" accept=".json,application/json,text/plain" onchange="readImport(this)" hidden><button class="btn pri" onclick="doImport()">Importer et fusionner</button></div>
+<p class="mut" id="io-msg" role="status" style="margin:6px 0 0"></p></div>`}
+const ioMsg=t=>{const m=$('io-msg');if(m)m.textContent=t};
+function copyExport(){
+  const d=exportData();
+  const fall=()=>{const t=$('io-txt');t.value=d;t.focus();t.select();ioMsg('Copie automatique impossible ici : le code est sélectionné dans la zone ci-dessus, copie-le avec Ctrl+C (ou appui long sur téléphone).')};
+  try{navigator.clipboard.writeText(d).then(()=>ioMsg(`Progression copiée (${Math.round(d.length/1024)} Ko). Colle-la dans la zone d’import de ton autre appareil.`),fall)}catch(e){fall()}
+}
+function dlExport(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([exportData()],{type:'application/json'}));a.download='progression-psi-'+TODAY()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);ioMsg('Sauvegarde téléchargée.')}
+function readImport(inp){const f=inp.files&&inp.files[0];if(!f)return;f.text().then(t=>{$('io-txt').value=t;ioMsg('Fichier chargé : clique sur « Importer et fusionner ».')})}
+function importData(o){
+  let n=0;const keys=new Map(Object.keys(DECKS).map(k=>[DECKS[k].key,k]));
+  for(const [key,st] of Object.entries(o.cards||{})){
+    const k=keys.get(key);if(!k||!st||typeof st!=='object')continue;
+    const L=getSt(k),sl=SRS[key]||(SRS[key]={}),si=(o.srs&&o.srs[key])||{},nC=DECKS[k].data.C.length;
+    for(const [ci,v] of Object.entries(st)){
+      if(!(+ci<nC)||(v!=='ok'&&v!=='ko'))continue;
+      const eI=si[ci]&&typeof si[ci]==='object'&&/^\d{4}-\d\d-\d\d$/.test(si[ci].d||'')?si[ci]:null,eL=sl[ci];
+      if(L[ci]&&((eI&&+eI.l||0)<=(eL&&+eL.l||0)))continue;
+      if(L[ci]===v&&JSON.stringify(eL)===JSON.stringify(eI))continue;
+      L[ci]=v;if(eI)sl[ci]={b:Math.min(IV.length-1,Math.max(0,Math.round(+eI.b||0))),d:eI.d,l:+eI.l||0};else delete sl[ci];n++;
+    }
+    putSt(k);
+  }
+  saveSrs();seedSrs();
+  if(o.dash&&typeof o.dash==='object'){DASH=mergeDash(DASH,normDash(o.dash));saveDash()}
+  return n;
+}
+function doImport(){
+  let o;try{o=JSON.parse($('io-txt').value.trim())}catch(e){ioMsg('Code illisible : vérifie que tu as copié le code en entier.');return}
+  if(!o||o.app!=='revisions-psi'){ioMsg('Ce code ne vient pas de ton site de révisions.');return}
+  const n=importData(o);$('io-txt').value='';renderStats();ioMsg(`Import terminé : ${n} carte${n>1?'s':''} mise${n>1?'s':''} à jour, agenda fusionné.`);
+}
+
+/* ---------- séance de révision (un chapitre ou un mélange) ---------- */
+let SES=null,cat=0,mode='',i=0,flipped=false,det=-1,ord=[],swiped=0;
 const VIEWS={'':'dash',revisions:'rev',stats:'stats',agenda:'agenda'};
+function mixSession(h){
+  let m;
+  if(h==='recherche')return SEARCH&&SEARCH.items.length?{title:`Recherche « ${SEARCH.q} »`,items:SEARCH.items,start:SEARCH.start}:null;
+  if((m=h.match(/^(jour|erreurs|melange|colle)-(all|\d+)$/))){
+    const ids=secIds(m[2]);if(!ids.length)return null;const nm=secName(m[2]);
+    if(m[1]==='jour')return {title:`Cartes du jour · ${nm}`,items:itemsOf(ids,isDue),shuffle:true,mode:'due'};
+    if(m[1]==='erreurs')return {title:`À revoir · ${nm}`,items:itemsOf(ids,isKo),shuffle:true,mode:'err'};
+    if(m[1]==='melange')return {title:`Tout mélangé · ${nm}`,items:itemsOf(ids),shuffle:true};
+    return {title:`Colle de 20 cartes · ${nm}`,items:shuffleArr(itemsOf(ids)).slice(0,20),colle:true};
+  }
+  if((m=h.match(/^ds-([a-z0-9]+)$/i))){
+    const e=DASH.agenda.find(x=>x.id===m[1]);if(!e)return null;
+    const ids=e.sec?(S.find(x=>x[0]===e.sec)||[0,[]])[1]:allIds(),g=[[],[],[],[]];
+    for(const [k,ci] of itemsOf(ids)){const v=getSt(k)[ci];g[v==='ko'?0:isDue(k,ci)?1:!v?2:3].push([k,ci])}
+    return {title:`Réviser pour : ${e.title}`,items:g.flatMap(shuffleArr),ds:true};
+  }
+  return null;
+}
 function route(){
-  const k=location.hash.slice(1);D=DECKS[k]||null;const v=D?'rev':(VIEWS[k]||'dash');
-  for(const n of ['dash','rev','stats','agenda'])$('v-'+n).hidden=!!D||v!==n;
-  $('deck').hidden=!D;
+  const h=location.hash.slice(1);
+  const ses=DECKS[h]?{single:h,title:DECKS[h].title,items:DECKS[h].data.C.map((_,ci)=>[h,ci])}:mixSession(h);
+  const v=ses?'rev':(VIEWS[h]||(h==='recherche'||/^(jour|erreurs|melange|colle)-/.test(h)?'rev':'dash'));
+  for(const n of ['dash','rev','stats','agenda'])$('v-'+n).hidden=!!ses||v!==n;
+  $('deck').hidden=!ses;
   document.querySelectorAll('.tabs a').forEach(a=>{if(a.dataset.v===v){a.setAttribute('aria-current','page');if(a.scrollIntoView)a.scrollIntoView({block:'nearest',inline:'nearest'})}else a.removeAttribute('aria-current')});
-  delId='';
-  if(!D){curView=v;refreshView();window.scrollTo(0,0);return}
-  ({CATS,C}=D.data);KEY=D.key;st={};try{st=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
-  $('dtitle').textContent='Révisions PSI — '+D.title;
-  cat=0;err=false;i=0;flipped=false;det=-1;ord=C.map((_,k)=>k);render();window.scrollTo(0,0);
-  if(DASH.last!==k){DASH.last=k;saveDash()}
+  delId='';SES=ses;
+  if(!ses){curView=v;refreshView();window.scrollTo(0,0);return}
+  cat=0;mode=ses.mode||'';flipped=false;det=-1;ord=ses.items.map((_,n)=>n);if(ses.shuffle)shuffleArr(ord);i=ses.start||0;
+  $('dtitle').textContent='Révisions PSI — '+ses.title;
+  render();window.scrollTo(0,0);
+  if(ses.single&&DASH.last!==h){DASH.last=h;saveDash()}
 }
-const deck=()=>ord.filter(k=>(cat===0||C[k][0]===cat)&&(!err||st[k]==='ko'));
+const deck=()=>ord.filter(n=>{const [k,ci]=SES.items[n];if(SES.single&&cat&&DECKS[k].data.C[ci][0]!==cat)return false;if(mode==='err')return isKo(k,ci);if(mode==='due')return isDue(k,ci);return true});
 function render(){
-  if(!D)return;
+  if(!SES)return;
   const d=deck();if(i>=d.length)i=0;
-  $('chips').innerHTML=CATS.map((c,n)=>`<button class="chip${n===cat&&!err?' on':''}" onclick="setCat(${n})">${c}</button>`).join('');
+  const its=SES.items,nd=its.filter(([k,ci])=>isDue(k,ci)).length,cats=SES.single?DECKS[SES.single].data.CATS:['Toutes'];
+  $('chips').innerHTML=cats.map((c,n)=>`<button class="chip${n===cat&&!mode?' on':''}" onclick="setCat(${n})">${c}</button>`).join('')+`<button class="chip${mode==='due'?' on':''}" onclick="setMode('due')">Cartes du jour · ${nd}</button>`;
   const app=$('app');
-  if(!d.length){app.innerHTML='<div class="card">Aucune carte ici. Bravo, ou choisis une autre catégorie.</div>'}
-  else{const k=d[i],c=C[k],s=st[k],p=(flipped?c[2]:c[1]).split('<br><b>Détail :</b>'),o=det===k&&flipped&&p[1];
-    app.innerHTML=`<div class="card" onclick="flip()"><div class="meta"><span>${CATS[c[0]]} · ${i+1}/${d.length}</span><span>${s==='ok'?'✓ su':s==='ko'?'✗ à revoir':''}</span></div><div class="t">${flipped?'Réponse':'Question'}</div><div class="b">${p[0]}</div>${p[1]&&flipped?'<div style="margin-top:12px"><button class="chip" onclick="event.stopPropagation();tg()">'+(o?'Masquer':'Voir')+' le détail</button></div>':''}${o?'<div class="dt">'+p[1]+'</div>':''}</div>
-    <div class="row"><button class="act ko" onclick="mark('ko')">✗ À revoir</button><button class="act" onclick="mv(1)">Passer</button><button class="act ok" onclick="mark('ok')">✓ Su</button></div>`;}
-  const v=Object.values(st),nk=v.filter(x=>x==='ko').length,no=v.filter(x=>x==='ok').length;
-  $('stat').innerHTML=`<span>Su : ${no}</span><span>À revoir : ${nk}</span><span>Restant : ${C.length-no-nk}</span>`+
-    `<button onclick="errs()">Refaire mes erreurs (${nk})</button><button onclick="shuf()">Mélanger</button><button onclick="rst()">Réinitialiser</button>`;
-  if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([app]).catch(()=>{});
+  if(!d.length){
+    app.innerHTML=`<div class="card">${mode==='due'?'Aucune carte à réviser aujourd’hui ici. Reviens demain, ou découvre de nouvelles cartes dans « Toutes ».':mode==='err'?'Plus aucune carte à revoir ici. Bravo !':'Aucune carte ici. Bravo, ou choisis une autre catégorie.'}</div>`;
+  }else{
+    const n=d[i],[k,ci]=its[n],DK=DECKS[k],c=DK.data.C[ci],s=getSt(k)[ci],p=(flipped?c[2]:c[1]).split('<br><b>Détail :</b>'),o=det===n&&flipped&&p[1];
+    const lab=(SES.single?'':esc(shortT(DK.title))+' · ')+DK.data.CATS[c[0]];
+    app.innerHTML=`<div class="card" onclick="flip()"><div class="meta"><span>${lab} · ${i+1}/${d.length}</span><span>${s==='ok'?'✓ su':s==='ko'?'✗ à revoir':'nouvelle'}${isDue(k,ci)?' · du jour':''}</span></div><div class="t">${flipped?'Réponse':'Question'}</div><div class="b">${p[0]}</div>${p[1]&&flipped?'<div style="margin-top:12px"><button class="chip" onclick="event.stopPropagation();tg()">'+(o?'Masquer':'Voir')+' le détail</button></div>':''}${o?'<div class="dt">'+p[1]+'</div>':''}</div>
+    <div class="row"><button class="act ko" onclick="mark('ko')">✗ À revoir</button><button class="act" onclick="mv(1)">Passer</button><button class="act ok" onclick="mark('ok')">✓ Su</button></div>`;
+    attachSwipe(app.querySelector('.card'));
+  }
+  const no=its.filter(([k,ci])=>getSt(k)[ci]==='ok').length,nk=its.filter(([k,ci])=>isKo(k,ci)).length;
+  $('stat').innerHTML=`<span>Su : ${no}</span><span>À revoir : ${nk}</span><span>Restant : ${its.length-no-nk}</span>`+
+    `<button onclick="setMode('err')">Refaire mes erreurs (${nk})</button><button onclick="shuf()">Mélanger</button>`+(SES.colle?'<button onclick="route()">Nouvelle colle</button>':'')+(SES.single?'<button onclick="rst()">Réinitialiser</button>':'');
+  typeset(app);
 }
-function setCat(n){cat=n;err=false;i=0;flipped=false;render()}
-function flip(){flipped=!flipped;render()}
-function tg(){const k=deck()[i];det=det===k?-1:k;render()}
+function attachSwipe(el){
+  if(!el)return;let x0=0,y0=0,dx=0,on=false,hz=false;
+  el.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;x0=e.touches[0].clientX;y0=e.touches[0].clientY;dx=0;on=true;hz=false;el.style.transition='none'},{passive:true});
+  el.addEventListener('touchmove',e=>{if(!on)return;const t=e.touches[0];dx=t.clientX-x0;const dy=t.clientY-y0;if(!hz&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy))hz=true;if(hz){el.style.transform=`translateX(${dx}px) rotate(${dx/30}deg)`;el.classList.toggle('sw-ok',dx>70);el.classList.toggle('sw-ko',dx<-70)}},{passive:true});
+  const end=()=>{if(!on)return;on=false;el.style.transition='';if(hz){swiped=Date.now();if(dx>70){mark('ok');return}if(dx<-70){mark('ko');return}}el.style.transform='';el.classList.remove('sw-ok','sw-ko')};
+  el.addEventListener('touchend',end);el.addEventListener('touchcancel',end);
+}
+function setCat(n){cat=n;mode='';i=0;flipped=false;render()}
+function setMode(m){mode=mode===m?'':m;cat=0;i=0;flipped=false;render()}
+function flip(){if(Date.now()-swiped<450)return;flipped=!flipped;render()}
+function tg(){const n=deck()[i];det=det===n?-1:n;render()}
 function mv(s){const n=deck().length||1;i=(i+s+n)%n;flipped=false;render()}
-function mark(x){const d=deck();if(d.length){st[d[i]]=x;save();logAct(x);if(err&&x==='ok'){flipped=false;render();return}}mv(1)}
-function errs(){err=true;cat=0;i=0;flipped=false;render()}
-function shuf(){for(let a=ord.length-1;a>0;a--){const b=Math.floor(Math.random()*(a+1));[ord[a],ord[b]]=[ord[b],ord[a]]}i=0;flipped=false;render()}
-function rst(){st={};save();err=false;i=0;flipped=false;render()}
-document.addEventListener('keydown',e=>{if(!D)return;if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key===' '){e.preventDefault();flip()}else if(e.key==='ArrowRight')mv(1);else if(e.key==='ArrowLeft')mv(-1)});
+function mark(x){
+  const d=deck();
+  if(d.length){const [k,ci]=SES.items[d[i]];getSt(k)[ci]=x;putSt(k);markSrs(k,ci,x);logAct(x);if((mode==='err'||mode==='due')&&x==='ok'){flipped=false;render();return}}
+  mv(1);
+}
+function shuf(){shuffleArr(ord);i=0;flipped=false;render()}
+function rst(){if(!SES||!SES.single)return;const k=SES.single;ST[DECKS[k].key]={};putSt(k);SRS[DECKS[k].key]={};saveSrs();mode='';i=0;flipped=false;render()}
+document.addEventListener('keydown',e=>{if(!SES)return;if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key===' '){e.preventDefault();flip()}else if(e.key==='ArrowRight')mv(1);else if(e.key==='ArrowLeft')mv(-1)});
 window.addEventListener('hashchange',route);
-window.addEventListener('storage',e=>{if(e.key===DKEY){try{DASH=normDash(JSON.parse(e.newValue||'null'))}catch(x){}refreshView()}});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshView()});
-route();paintSync();initSync(3);
+window.addEventListener('storage',e=>{
+  if(e.key===DKEY){try{DASH=normDash(JSON.parse(e.newValue||'null'))}catch(x){}}
+  else if(e.key===SKEY){try{SRS=JSON.parse(e.newValue||'{}')||{}}catch(x){}}
+  else if(e.key&&e.key.startsWith('psi_cards'))delete ST[e.key];
+  if(!SES)refreshView();
+});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!SES)refreshView()});
+if('serviceWorker' in navigator&&/github\.io$/.test(location.hostname))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+seedSrs();route();paintSync();initSync(3);
 </script>
 
 </body></html>
