@@ -3311,8 +3311,10 @@ function dayAct(k){return DASH.act[k]||{n:0,ok:0}}
 function pace(days){let t=0;const d=new Date();for(let i=0;i<days;i++){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()-i);t+=dayAct(ymd(x)).n}return t/days}
 function streak(){let c=0;const d=new Date();if(!dayAct(ymd(d)).n)d.setDate(d.getDate()-1);while(dayAct(ymd(d)).n){c++;d.setDate(d.getDate()-1)}return c}
 function logAct(x){const k=TODAY(),o=Object.assign({},dayAct(k));o.n++;if(x==='ok')o.ok++;DASH.act[k]=o;saveDash()}
+const scopeSecs=sec=>!sec?S:sec==='none'?[]:S.filter(x=>x[0]===sec||x[0].startsWith(sec+' — '));
+const scopeName=sec=>!sec?'Toutes les sections':sec==='Physique'?'Physique (toutes)':esc(sec.replace('Physique — ',''));
 function forecast(e){
-  const sc=e.sec?S.filter(x=>x[0]===e.sec):S,s=sumStat(sc.flatMap(x=>x[1])),days=daysTo(e.date),todo=s.ko+s.rest;
+  const sc=scopeSecs(e.sec),s=sumStat(sc.flatMap(x=>x[1])),days=daysTo(e.date),todo=s.ko+s.rest;
   const per=days>0?Math.ceil(todo/days):todo,p=pace(7);let state;
   if(!s.n)state=['warn','Aucune carte dans cette section'];
   else if(!todo)state=['ok','Tout est su'];
@@ -3326,7 +3328,7 @@ function forecast(e){
 const jd=n=>n===0?'<span>Auj.</span>':n>0?`J-${n}<small>${n>1?'jours':'jour'}</small>`:`J+${-n}<small>passé</small>`;
 function evRow(e,opts){
   const f=forecast(e),main=DASH.prefs.main===e.id,past=f.days<0;
-  const scope=e.sec?esc(e.sec.replace('Physique — ','')):'Toutes les sections';
+  const scope=scopeName(e.sec);
   let h=`<div class="ev${main?' main':''}${past?' past':''}"><div class="jd">${jd(f.days)}</div><div class="ev-b"><div class="meta-l"><span class="chip-t">${esc(e.type)}</span>${main?'<span class="chip-t">Principale</span>':''}<span class="mut">${fDate(e.date)}</span></div><b>${esc(e.title)}</b>`;
   if(!past&&f.s.n)h+=`<div class="meta-l"><span class="state ${f.state[0]}">${f.state[1]}</span><span class="mut num">${scope} : ${f.todo} cartes à travailler${f.days>0&&f.todo?` · ${f.per}/jour nécessaires · ton rythme ${Math.round(f.p)}/jour`:''}</span></div>`;
   if(e.note)h+=`<div class="mut">${esc(e.note)}</div>`;
@@ -3410,7 +3412,7 @@ function renderAgenda(){
 <label class="fld full" for="ev-title">Titre<input id="ev-title" required maxlength="80" placeholder="Ex. DS n°4 d’électromagnétisme" value="${esc(ed.title)}"></label>
 <label class="fld" for="ev-date">Date<input id="ev-date" type="date" required value="${ed.date}"></label>
 <label class="fld" for="ev-type">Type<select id="ev-type">${TYPES.map(x=>`<option${x===ed.type?' selected':''}>${x}</option>`).join('')}</select></label>
-<label class="fld full" for="ev-sec">Chapitres concernés (pour la prévision)<select id="ev-sec"><option value="">Toutes les sections</option>${S.filter(x=>x[1].length).map(x=>`<option value="${esc(x[0])}"${x[0]===ed.sec?' selected':''}>${esc(x[0])}</option>`).join('')}</select></label>
+<label class="fld full" for="ev-sec">Chapitres concernés (pour la prévision)<select id="ev-sec"><option value="">Toutes les sections</option><option value="Physique"${ed.sec==='Physique'?' selected':''}>Physique (toutes les sections)</option>${S.filter(x=>x[1].length||x[0]===ed.sec).map(x=>`<option value="${esc(x[0])}"${x[0]===ed.sec?' selected':''}>${esc(x[0])}</option>`).join('')}<option value="none"${ed.sec==='none'?' selected':''}>Aucune (pas de cartes, ex. anglais)</option></select></label>
 <label class="fld full" for="ev-note">Note (facultatif)<textarea id="ev-note" maxlength="300" placeholder="Ex. chapitres 1 à 5, calculatrice interdite">${esc(ed.note)}</textarea></label>
 <div class="full row" style="margin:0"><button class="btn pri" type="submit">${editId?'Enregistrer':'Ajouter'}</button>${editId?'<button class="btn" type="button" onclick="cancelEv()">Annuler</button>':''}</div></form>`;
   if(past.length)h+=`<details class="srow" style="margin-top:20px"><summary><b>Échéances passées (${past.length})</b></summary><div style="padding:0 12px 4px">${past.map(e=>evRow(e,{edit:true})).join('')}</div></details>`;
@@ -3529,13 +3531,19 @@ function importData(o){
     putSt(k);
   }
   saveSrs();seedSrs();
-  if(o.dash&&typeof o.dash==='object'){DASH=mergeDash(DASH,normDash(o.dash));saveDash()}
-  return n;
+  let na=0;
+  if(o.dash&&typeof o.dash==='object'){
+    const inc=normDash(o.dash),have=new Set(DASH.agenda.map(e=>e.id));
+    for(const e of inc.agenda)if(!have.has(e.id)){DASH.agenda.push(e);na++}
+    for(const [k,v] of Object.entries(inc.act)){const o2=DASH.act[k]||{n:0,ok:0};DASH.act[k]={n:Math.max(o2.n,v.n),ok:Math.max(o2.ok,v.ok)}}
+    saveDash();
+  }
+  importData.added=na;return n;
 }
 function doImport(){
   let o;try{o=JSON.parse($('io-txt').value.trim())}catch(e){ioMsg('Code illisible : vérifie que tu as copié le code en entier.');return}
   if(!o||o.app!=='revisions-psi'){ioMsg('Ce code ne vient pas de ton site de révisions.');return}
-  const n=importData(o);$('io-txt').value='';renderStats();ioMsg(`Import terminé : ${n} carte${n>1?'s':''} mise${n>1?'s':''} à jour, agenda fusionné.`);
+  const n=importData(o);$('io-txt').value='';renderStats();const na=importData.added||0;ioMsg(`Import terminé : ${n} carte${n>1?'s':''} mise${n>1?'s':''} à jour, ${na} échéance${na>1?'s':''} ajoutée${na>1?'s':''} à l’agenda.`);
 }
 
 /* ---------- séance de révision (un chapitre ou un mélange) ---------- */
@@ -3553,7 +3561,7 @@ function mixSession(h){
   }
   if((m=h.match(/^ds-([a-z0-9]+)$/i))){
     const e=DASH.agenda.find(x=>x.id===m[1]);if(!e)return null;
-    const ids=e.sec?(S.find(x=>x[0]===e.sec)||[0,[]])[1]:allIds(),g=[[],[],[],[]];
+    const ids=scopeSecs(e.sec).flatMap(x=>x[1]),g=[[],[],[],[]];
     for(const [k,ci] of itemsOf(ids)){const v=getSt(k)[ci];g[v==='ko'?0:isDue(k,ci)?1:!v?2:3].push([k,ci])}
     return {title:`Réviser pour : ${e.title}`,items:g.flatMap(shuffleArr),ds:true};
   }
